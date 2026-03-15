@@ -1,0 +1,71 @@
+package com.cookiejar.controller;
+
+import com.cookiejar.model.Admin;
+import com.cookiejar.model.Order;
+import com.cookiejar.model.OrderItem;
+import com.cookiejar.model.Product;
+import com.cookiejar.repository.AdminRepository;
+import com.cookiejar.repository.OrderRepository;
+import com.cookiejar.repository.ProductRepository;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/orders")
+public class OrderController {
+    private final OrderRepository orderRepository;
+    private final ProductRepository productRepository;
+    private final AdminRepository adminRepository;
+
+    public OrderController(OrderRepository orderRepository, ProductRepository productRepository, AdminRepository adminRepository) {
+        this.orderRepository = orderRepository;
+        this.productRepository = productRepository;
+        this.adminRepository = adminRepository;
+    }
+
+    @PostMapping
+    public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
+        List<Map<String,Object>> items = (List<Map<String,Object>>) body.get("items");
+        Number createdById = (Number) body.get("createdById");
+        if (items == null || items.isEmpty()) return ResponseEntity.badRequest().body("items required");
+        Order order = new Order();
+        order.setStatus("pending");
+        order.setTotalCents(0);
+        if (createdById != null) {
+            Admin admin = adminRepository.findById(createdById.longValue()).orElse(null);
+            order.setCreatedBy(admin);
+        }
+        List<OrderItem> orderItems = new ArrayList<>();
+        int total=0;
+        for (Map<String,Object> i : items) {
+            Long productId = ((Number)i.get("productId")).longValue();
+            int qty = ((Number)i.get("quantity")).intValue();
+            Product p = productRepository.findById(productId).orElse(null);
+            if (p == null) return ResponseEntity.badRequest().body("product not found");
+            if (p.getInventory() < qty) return ResponseEntity.badRequest().body("insufficient inventory");
+            p.setInventory(p.getInventory()-qty);
+            productRepository.save(p);
+            OrderItem oi = new OrderItem(); oi.setProduct(p); oi.setQuantity(qty); oi.setUnitPrice(p.getPriceCents()); oi.setOrder(order);
+            orderItems.add(oi);
+            total += p.getPriceCents()*qty;
+        }
+        order.setTotalCents(total);
+        order.setItems(orderItems);
+        return ResponseEntity.status(201).body(orderRepository.save(order));
+    }
+
+    @GetMapping
+    public List<Order> list() { return orderRepository.findAll(); }
+    @GetMapping("/{id}")
+    public ResponseEntity<Order> get(@PathVariable Long id) {
+        return orderRepository.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+    }
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<?> status(@PathVariable Long id,@RequestBody Map<String,String> body){
+      String status=body.get("status"); if(status==null)return ResponseEntity.badRequest().body("status required");
+      return orderRepository.findById(id).map(o->{ o.setStatus(status); return ResponseEntity.ok(orderRepository.save(o));}).orElse(ResponseEntity.notFound().build());
+    }
+}
