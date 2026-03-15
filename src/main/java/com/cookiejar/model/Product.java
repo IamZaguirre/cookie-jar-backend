@@ -1,5 +1,6 @@
 package com.cookiejar.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,12 +19,14 @@ public class Product {
     private Integer priceCents;
     @Column(unique = true)
     private String sku;
+    private String imageUrl;
     @Column(nullable = false)
     private Integer inventory = 0;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
     @Column(nullable = false)
     private Instant updatedAt = Instant.now();
+    @JsonIgnore
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
     private List<OrderItem> orderItems = new ArrayList<>();
 
@@ -40,6 +43,8 @@ public class Product {
     public void setPriceCents(Integer priceCents) { this.priceCents = priceCents; }
     public String getSku() { return sku; }
     public void setSku(String sku) { this.sku = sku; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public Integer getInventory() { return inventory; }
     public void setInventory(Integer inventory) { this.inventory = inventory; }
     public Instant getCreatedAt() { return createdAt; }

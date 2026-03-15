@@ -17,6 +17,11 @@ public class Order {
     private Integer totalCents;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
+    private Instant neededAt;
+    private String firstName;
+    private String lastName;
+    private String email;
+    private String phone;
     @ManyToOne
     @JoinColumn(name = "created_by_id")
     private Admin createdBy;
@@ -31,6 +36,16 @@ public class Order {
     public void setTotalCents(Integer totalCents) { this.totalCents = totalCents; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Instant getNeededAt() { return neededAt; }
+    public void setNeededAt(Instant neededAt) { this.neededAt = neededAt; }
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
     public Admin getCreatedBy() { return createdBy; }
     public void setCreatedBy(Admin createdBy) { this.createdBy = createdBy; }
     public List<OrderItem> getItems() { return items; }

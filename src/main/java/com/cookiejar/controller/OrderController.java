@@ -9,6 +9,8 @@ import com.cookiejar.repository.OrderRepository;
 import com.cookiejar.repository.ProductRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,10 +32,22 @@ public class OrderController {
     public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
         List<Map<String,Object>> items = (List<Map<String,Object>>) body.get("items");
         Number createdById = (Number) body.get("createdById");
+        String neededAtValue = body.get("neededAt") instanceof String ? ((String) body.get("neededAt")).trim() : null;
         if (items == null || items.isEmpty()) return ResponseEntity.badRequest().body("items required");
         Order order = new Order();
         order.setStatus("pending");
         order.setTotalCents(0);
+        order.setFirstName((String) body.get("firstName"));
+        order.setLastName((String) body.get("lastName"));
+        order.setEmail((String) body.get("email"));
+        order.setPhone((String) body.get("phone"));
+        if (neededAtValue != null && !neededAtValue.isEmpty()) {
+            try {
+                order.setNeededAt(Instant.parse(neededAtValue));
+            } catch (Exception ex) {
+                return ResponseEntity.badRequest().body("neededAt must be a valid ISO-8601 datetime");
+            }
+        }
         if (createdById != null) {
             Admin admin = adminRepository.findById(createdById.longValue()).orElse(null);
             order.setCreatedBy(admin);
@@ -60,11 +74,11 @@ public class OrderController {
     @GetMapping
     public List<Order> list() { return orderRepository.findAll(); }
     @GetMapping("/{id}")
-    public ResponseEntity<Order> get(@PathVariable Long id) {
+        public ResponseEntity<Order> get(@PathVariable("id") Long id) {
         return orderRepository.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
     @PatchMapping("/{id}/status")
-    public ResponseEntity<?> status(@PathVariable Long id,@RequestBody Map<String,String> body){
+        public ResponseEntity<?> status(@PathVariable("id") Long id,@RequestBody Map<String,String> body){
       String status=body.get("status"); if(status==null)return ResponseEntity.badRequest().body("status required");
       return orderRepository.findById(id).map(o->{ o.setStatus(status); return ResponseEntity.ok(orderRepository.save(o));}).orElse(ResponseEntity.notFound().build());
     }

@@ -1,5 +1,6 @@
 package com.cookiejar.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,11 +14,13 @@ public class Admin {
     private Long id;
     @Column(nullable = false, unique = true)
     private String email;
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
     private String name;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
+    @JsonIgnore
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
     private List<Order> orders = new ArrayList<>();
 
