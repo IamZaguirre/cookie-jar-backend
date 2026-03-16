@@ -1,6 +1,7 @@
 package com.cookiejar.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -14,7 +15,7 @@ public class Admin {
     private Long id;
     @Column(nullable = false, unique = true)
     private String email;
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(nullable = false)
     private String password;
     private String name;
