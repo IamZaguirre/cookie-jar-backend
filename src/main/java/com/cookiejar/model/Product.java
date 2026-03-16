@@ -22,6 +22,8 @@ public class Product {
     private String imageUrl;
     @Column(nullable = false)
     private Integer inventory = 0;
+    @Column
+    private Boolean inStock = true;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
     @Column(nullable = false)
@@ -47,6 +49,8 @@ public class Product {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public Integer getInventory() { return inventory; }
     public void setInventory(Integer inventory) { this.inventory = inventory; }
+    public Boolean getInStock() { return inStock; }
+    public void setInStock(Boolean inStock) { this.inStock = inStock; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

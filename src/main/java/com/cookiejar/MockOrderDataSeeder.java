@@ -36,6 +36,9 @@ public class MockOrderDataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensureAdminUser("admin@cookie.com", "abc123", "Cookie Jar Admin");
+        Admin admin = ensureAdminUser("ana@cookie.com", "AnaWanda08!", "Ana");
+
         List<Order> existing = orderRepository.findAll();
         Instant[] neededAtValues = {
                 Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.HOURS),
@@ -70,15 +73,6 @@ public class MockOrderDataSeeder implements CommandLineRunner {
             if (!patched) return;
             return;
         }
-
-        Admin admin = adminRepository.findByEmail("admin@cookie.com")
-                .orElseGet(() -> {
-                    Admin newAdmin = new Admin();
-                    newAdmin.setEmail("admin@cookie.com");
-                    newAdmin.setPassword("abc123");
-                    newAdmin.setName("Cookie Jar Admin");
-                    return adminRepository.save(newAdmin);
-                });
 
         List<Product> products = ensureProducts();
         if (products.size() < 3) {
@@ -121,6 +115,17 @@ public class MockOrderDataSeeder implements CommandLineRunner {
         ));
 
         orderRepository.saveAll(mockOrders);
+    }
+
+    private Admin ensureAdminUser(String email, String password, String name) {
+        return adminRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    Admin newAdmin = new Admin();
+                    newAdmin.setEmail(email);
+                    newAdmin.setPassword(password);
+                    newAdmin.setName(name);
+                    return adminRepository.save(newAdmin);
+                });
     }
 
     private List<Product> ensureProducts() {

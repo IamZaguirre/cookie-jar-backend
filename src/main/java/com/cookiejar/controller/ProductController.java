@@ -32,6 +32,7 @@ public class ProductController {
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Product p) {
         if (p.getName()==null || p.getPriceCents()==null) return ResponseEntity.badRequest().body("name and priceCents required");
+        if (p.getInStock() == null) p.setInStock(true);
         return ResponseEntity.status(201).body(repository.save(p));
     }
 
@@ -52,6 +53,7 @@ public class ProductController {
             if (p.getSku()!=null) e.setSku(p.getSku());
             if (p.getImageUrl()!=null) e.setImageUrl(p.getImageUrl());
             if (p.getInventory()!=null) e.setInventory(p.getInventory());
+            if (p.getInStock()!=null) e.setInStock(p.getInStock());
             repository.save(e);
             return ResponseEntity.ok(e);
         }).orElse(ResponseEntity.notFound().build());
