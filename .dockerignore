@@ -1,0 +1,11 @@
+.git
+.gitignore
+target
+uploads
+apache-maven-3.9.9
+maven.zip
+.mvn
+mvnw
+mvnw.cmd
+README.md
+.env
