@@ -39,42 +39,14 @@ public class MockOrderDataSeeder implements CommandLineRunner {
         ensureAdminUser("admin@cookie.com", "abc123", "Cookie Jar Admin");
         Admin admin = ensureAdminUser("ana@cookie.com", "AnaWanda08!", "Ana");
 
-        List<Order> existing = orderRepository.findAll();
-        Instant[] neededAtValues = {
-                Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.HOURS),
-                Instant.now().plus(6, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS),
-                Instant.now().minus(1, ChronoUnit.DAYS).plus(9, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS),
-        };
-        if (!existing.isEmpty()) {
-            // Patch any existing mock orders that are missing customer info
-            String[][] customers = {
-                {"Sarah", "Mitchell", "sarah.mitchell@email.com", "+1 (555) 204-3817"},
-                {"James", "Navarro", "james.navarro@email.com", "+1 (555) 371-9024"},
-                {"Priya", "Okonkwo", "priya.okonkwo@email.com", "+1 (555) 489-6153"},
-            };
-            boolean patched = false;
-            for (int i = 0; i < existing.size() && i < customers.length; i++) {
-                Order o = existing.get(i);
-                if (o.getFirstName() == null) {
-                    o.setFirstName(customers[i][0]);
-                    o.setLastName(customers[i][1]);
-                    o.setEmail(customers[i][2]);
-                    o.setPhone(customers[i][3]);
-                    patched = true;
-                }
-                if (o.getNeededAt() == null) {
-                    o.setNeededAt(neededAtValues[i]);
-                    patched = true;
-                }
-                if (patched) {
-                    orderRepository.save(o);
-                }
-            }
-            if (!patched) return;
+        // Skip seeding entirely if the database already has any data.
+        // This ensures re-deployments never overwrite products or orders
+        // that were created or edited in production.
+        if (productRepository.count() > 0 || orderRepository.count() > 0) {
             return;
         }
 
-        List<Product> products = ensureProducts();
+        List<Product> products = seedProducts();
         if (products.size() < 3) {
             return;
         }
@@ -128,34 +100,18 @@ public class MockOrderDataSeeder implements CommandLineRunner {
                 });
     }
 
-    private List<Product> ensureProducts() {
-        List<Product> products = new ArrayList<>(productRepository.findAll());
-        if (products.size() >= 3) {
-            topUpInventory(products.get(0), 3);
-            topUpInventory(products.get(1), 4);
-            topUpInventory(products.get(2), 6);
-            return productRepository.saveAll(products);
-        }
-
-        while (products.size() < 3) {
+    private List<Product> seedProducts() {
+        List<Product> products = new ArrayList<>();
+        for (int i = 1; i <= 3; i++) {
             Product product = new Product();
-            int index = products.size() + 1;
-            product.setName("Sample Cookie Box " + index);
+            product.setName("Sample Cookie Box " + i);
             product.setDescription("Mock seeded product for dashboard testing.");
-            product.setPriceCents(18000 + (index * 2500));
-            product.setSku("SAMPLE-COOKIE-" + index);
+            product.setPriceCents(18000 + (i * 2500));
+            product.setSku("SAMPLE-COOKIE-" + i);
             product.setInventory(20);
             products.add(productRepository.save(product));
         }
-
         return products;
-    }
-
-    private void topUpInventory(Product product, int minimumNeeded) {
-        int currentInventory = product.getInventory() == null ? 0 : product.getInventory();
-        if (currentInventory < minimumNeeded + 5) {
-            product.setInventory(minimumNeeded + 10);
-        }
     }
 
     private Order buildOrder(
