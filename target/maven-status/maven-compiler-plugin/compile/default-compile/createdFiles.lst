@@ -1,5 +1,6 @@
 com\cookiejar\controller\OrderController.class
 com\cookiejar\repository\ProductRepository.class
+com\cookiejar\service\CloudinaryService.class
 com\cookiejar\model\Product.class
 com\cookiejar\controller\AdminController.class
 com\cookiejar\model\Order.class

@@ -22,6 +22,7 @@ public class Order {
     private String lastName;
     private String email;
     private String phone;
+    private String proofOfPaymentUrl;
     @ManyToOne
     @JoinColumn(name = "created_by_id")
     private Admin createdBy;
@@ -46,6 +47,8 @@ public class Order {
     public void setEmail(String email) { this.email = email; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+    public String getProofOfPaymentUrl() { return proofOfPaymentUrl; }
+    public void setProofOfPaymentUrl(String proofOfPaymentUrl) { this.proofOfPaymentUrl = proofOfPaymentUrl; }
     public Admin getCreatedBy() { return createdBy; }
     public void setCreatedBy(Admin createdBy) { this.createdBy = createdBy; }
     public List<OrderItem> getItems() { return items; }
