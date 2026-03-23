@@ -9,6 +9,9 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 
@@ -17,6 +20,8 @@ import java.util.List;
 public class ProductController {
     private final ProductRepository repository;
     private final CloudinaryService cloudinaryService;
+
+    private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
 
     public ProductController(ProductRepository repository, CloudinaryService cloudinaryService) {
         this.repository = repository;
@@ -29,20 +34,24 @@ public class ProductController {
             @RequestPart(value = "image", required = false) MultipartFile image
     ) {
         try {
-            System.out.println("Received productJson: " + productJson);
+            logger.info("[CREATE PRODUCT] Received productJson: {}", productJson);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
-            System.out.println("Parsed Product: name=" + p.getName() + ", priceCents=" + p.getPriceCents());
-            if (p.getName()==null || p.getPriceCents()==null) return ResponseEntity.badRequest().body("name and priceCents required");
+            logger.info("[CREATE PRODUCT] Parsed Product: name={}, priceCents={}", p.getName(), p.getPriceCents());
+            if (p.getName()==null || p.getPriceCents()==null) {
+                logger.warn("[CREATE PRODUCT] name and priceCents required");
+                return ResponseEntity.badRequest().body("name and priceCents required");
+            }
             if (p.getInStock() == null) p.setInStock(true);
             if (image != null && !image.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadImage(image);
                 p.setImageUrl(imageUrl);
             }
             Product saved = repository.save(p);
+            logger.info("[CREATE PRODUCT] Product saved with id={}", saved.getId());
             return ResponseEntity.status(201).body(saved);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("[CREATE PRODUCT] Product creation failed", e);
             return ResponseEntity.internalServerError().body("Product creation failed: " + e.getMessage());
         }
     }
@@ -62,10 +71,10 @@ public class ProductController {
             @RequestPart(value = "image", required = false) MultipartFile image
     ) {
         try {
-            System.out.println("Received productJson: " + productJson);
+            logger.info("[UPDATE PRODUCT] Received productJson: {} for id={}", productJson, id);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
-            System.out.println("Parsed Product: name=" + p.getName() + ", priceCents=" + p.getPriceCents());
+            logger.info("[UPDATE PRODUCT] Parsed Product: name={}, priceCents={}", p.getName(), p.getPriceCents());
             return repository.findById(id).map(e -> {
                 try {
                     if (p.getName()!=null) e.setName(p.getName());
@@ -81,14 +90,18 @@ public class ProductController {
                         cloudinaryService.deleteImage(oldImageUrl);
                     }
                     repository.save(e);
+                    logger.info("[UPDATE PRODUCT] Product updated with id={}", e.getId());
                     return ResponseEntity.ok(e);
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    logger.error("[UPDATE PRODUCT] Product update failed for id=" + id, ex);
                     return ResponseEntity.internalServerError().body("Product update failed: " + ex.getMessage());
                 }
-            }).orElse(ResponseEntity.notFound().build());
+            }).orElseGet(() -> {
+                logger.warn("[UPDATE PRODUCT] Product not found for id={}", id);
+                return ResponseEntity.notFound().build();
+            });
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("[UPDATE PRODUCT] Product update failed for id=" + id, e);
             return ResponseEntity.internalServerError().body("Product update failed: " + e.getMessage());
         }
     }
