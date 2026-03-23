@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.List;
@@ -24,12 +25,16 @@ public class ProductController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> create(
-            @RequestPart("product") Product p,
+            @RequestPart("product") String productJson,
             @RequestPart(value = "image", required = false) MultipartFile image
     ) {
-        if (p.getName()==null || p.getPriceCents()==null) return ResponseEntity.badRequest().body("name and priceCents required");
-        if (p.getInStock() == null) p.setInStock(true);
         try {
+            System.out.println("Received productJson: " + productJson);
+            ObjectMapper mapper = new ObjectMapper();
+            Product p = mapper.readValue(productJson, Product.class);
+            System.out.println("Parsed Product: name=" + p.getName() + ", priceCents=" + p.getPriceCents());
+            if (p.getName()==null || p.getPriceCents()==null) return ResponseEntity.badRequest().body("name and priceCents required");
+            if (p.getInStock() == null) p.setInStock(true);
             if (image != null && !image.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadImage(image);
                 p.setImageUrl(imageUrl);
@@ -37,7 +42,7 @@ public class ProductController {
             Product saved = repository.save(p);
             return ResponseEntity.status(201).body(saved);
         } catch (Exception e) {
-            e.printStackTrace(); // Log the full error to Railway logs
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body("Product creation failed: " + e.getMessage());
         }
     }
@@ -53,30 +58,39 @@ public class ProductController {
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> update(
             @PathVariable("id") Long id,
-            @RequestPart("product") Product p,
+            @RequestPart("product") String productJson,
             @RequestPart(value = "image", required = false) MultipartFile image
     ) {
-        return repository.findById(id).map(e -> {
-            try {
-                if (p.getName()!=null) e.setName(p.getName());
-                if (p.getDescription()!=null) e.setDescription(p.getDescription());
-                if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
-                if (p.getSku()!=null) e.setSku(p.getSku());
-                if (p.getInventory()!=null) e.setInventory(p.getInventory());
-                if (p.getInStock()!=null) e.setInStock(p.getInStock());
-                if (image != null && !image.isEmpty()) {
-                    String oldImageUrl = e.getImageUrl();
-                    String newImageUrl = cloudinaryService.uploadImage(image);
-                    e.setImageUrl(newImageUrl);
-                    cloudinaryService.deleteImage(oldImageUrl);
+        try {
+            System.out.println("Received productJson: " + productJson);
+            ObjectMapper mapper = new ObjectMapper();
+            Product p = mapper.readValue(productJson, Product.class);
+            System.out.println("Parsed Product: name=" + p.getName() + ", priceCents=" + p.getPriceCents());
+            return repository.findById(id).map(e -> {
+                try {
+                    if (p.getName()!=null) e.setName(p.getName());
+                    if (p.getDescription()!=null) e.setDescription(p.getDescription());
+                    if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
+                    if (p.getSku()!=null) e.setSku(p.getSku());
+                    if (p.getInventory()!=null) e.setInventory(p.getInventory());
+                    if (p.getInStock()!=null) e.setInStock(p.getInStock());
+                    if (image != null && !image.isEmpty()) {
+                        String oldImageUrl = e.getImageUrl();
+                        String newImageUrl = cloudinaryService.uploadImage(image);
+                        e.setImageUrl(newImageUrl);
+                        cloudinaryService.deleteImage(oldImageUrl);
+                    }
+                    repository.save(e);
+                    return ResponseEntity.ok(e);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    return ResponseEntity.internalServerError().body("Product update failed: " + ex.getMessage());
                 }
-                repository.save(e);
-                return ResponseEntity.ok(e);
-            } catch (Exception ex) {
-                ex.printStackTrace(); // Log the full error to Railway logs
-                return ResponseEntity.internalServerError().body("Product update failed: " + ex.getMessage());
-            }
-        }).orElse(ResponseEntity.notFound().build());
+            }).orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Product update failed: " + e.getMessage());
+        }
     }
 
     @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
