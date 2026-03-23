@@ -22,11 +22,24 @@ public class ProductController {
         this.cloudinaryService = cloudinaryService;
     }
 
-    @PostMapping
-    public ResponseEntity<?> create(@RequestBody Product p) {
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> create(
+            @RequestPart("product") Product p,
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) {
         if (p.getName()==null || p.getPriceCents()==null) return ResponseEntity.badRequest().body("name and priceCents required");
         if (p.getInStock() == null) p.setInStock(true);
-        return ResponseEntity.status(201).body(repository.save(p));
+        try {
+            if (image != null && !image.isEmpty()) {
+                String imageUrl = cloudinaryService.uploadImage(image);
+                p.setImageUrl(imageUrl);
+            }
+            Product saved = repository.save(p);
+            return ResponseEntity.status(201).body(saved);
+        } catch (Exception e) {
+            e.printStackTrace(); // Log the full error to Railway logs
+            return ResponseEntity.internalServerError().body("Product creation failed: " + e.getMessage());
+        }
     }
 
     @GetMapping
@@ -37,18 +50,32 @@ public class ProductController {
         return repository.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable("id") Long id, @RequestBody Product p) {
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> update(
+            @PathVariable("id") Long id,
+            @RequestPart("product") Product p,
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) {
         return repository.findById(id).map(e -> {
-            if (p.getName()!=null) e.setName(p.getName());
-            if (p.getDescription()!=null) e.setDescription(p.getDescription());
-            if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
-            if (p.getSku()!=null) e.setSku(p.getSku());
-            if (p.getImageUrl()!=null) e.setImageUrl(p.getImageUrl());
-            if (p.getInventory()!=null) e.setInventory(p.getInventory());
-            if (p.getInStock()!=null) e.setInStock(p.getInStock());
-            repository.save(e);
-            return ResponseEntity.ok(e);
+            try {
+                if (p.getName()!=null) e.setName(p.getName());
+                if (p.getDescription()!=null) e.setDescription(p.getDescription());
+                if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
+                if (p.getSku()!=null) e.setSku(p.getSku());
+                if (p.getInventory()!=null) e.setInventory(p.getInventory());
+                if (p.getInStock()!=null) e.setInStock(p.getInStock());
+                if (image != null && !image.isEmpty()) {
+                    String oldImageUrl = e.getImageUrl();
+                    String newImageUrl = cloudinaryService.uploadImage(image);
+                    e.setImageUrl(newImageUrl);
+                    cloudinaryService.deleteImage(oldImageUrl);
+                }
+                repository.save(e);
+                return ResponseEntity.ok(e);
+            } catch (Exception ex) {
+                ex.printStackTrace(); // Log the full error to Railway logs
+                return ResponseEntity.internalServerError().body("Product update failed: " + ex.getMessage());
+            }
         }).orElse(ResponseEntity.notFound().build());
     }
 
