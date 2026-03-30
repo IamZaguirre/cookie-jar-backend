@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
@@ -37,12 +38,22 @@ public class ProductController {
             logger.info("[CREATE PRODUCT] Received productJson: {}", productJson);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
-            logger.info("[CREATE PRODUCT] Parsed Product: name={}, priceCents={}", p.getName(), p.getPriceCents());
+            // Debug: log the type and value of inventory
+            com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(productJson);
+            com.fasterxml.jackson.databind.JsonNode inventoryNode = rootNode.get("inventory");
+            logger.info(
+                "[CREATE PRODUCT] Parsed Product: name={}, priceCents={}, inventory={}, rawInventoryType={}, rawInventoryValue={}",
+                p.getName(),
+                p.getPriceCents(),
+                p.getInventory(),
+                inventoryNode != null ? inventoryNode.getNodeType() : "null",
+                inventoryNode != null ? inventoryNode.toString() : "null"
+            );
             if (p.getName()==null || p.getPriceCents()==null) {
                 logger.warn("[CREATE PRODUCT] name and priceCents required");
-                return ResponseEntity.badRequest().body("name and priceCents required");
+                return ResponseEntity.badRequest().body(Map.of("message", "name and priceCents required"));
             }
-            if (p.getInStock() == null) p.setInStock(true);
+            if (p.getInventory() == null) p.setInventory(0);
             if (image != null && !image.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadImage(image);
                 p.setImageUrl(imageUrl);
@@ -52,7 +63,7 @@ public class ProductController {
             return ResponseEntity.status(201).body(saved);
         } catch (Exception e) {
             logger.error("[CREATE PRODUCT] Product creation failed", e);
-            return ResponseEntity.internalServerError().body("Product creation failed: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Product creation failed: " + e.getMessage()));
         }
     }
 
@@ -74,35 +85,36 @@ public class ProductController {
             logger.info("[UPDATE PRODUCT] Received productJson: {} for id={}", productJson, id);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
-            logger.info("[UPDATE PRODUCT] Parsed Product: name={}, priceCents={}", p.getName(), p.getPriceCents());
-            return repository.findById(id).map(e -> {
-                try {
-                    if (p.getName()!=null) e.setName(p.getName());
-                    if (p.getDescription()!=null) e.setDescription(p.getDescription());
-                    if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
-                    if (p.getSku()!=null) e.setSku(p.getSku());
-                    if (p.getInventory()!=null) e.setInventory(p.getInventory());
-                    if (p.getInStock()!=null) e.setInStock(p.getInStock());
-                    if (image != null && !image.isEmpty()) {
-                        String oldImageUrl = e.getImageUrl();
-                        String newImageUrl = cloudinaryService.uploadImage(image);
-                        e.setImageUrl(newImageUrl);
-                        cloudinaryService.deleteImage(oldImageUrl);
+            logger.info("[UPDATE PRODUCT] Parsed Product: name={}, priceCents={}, inventory={}", p.getName(), p.getPriceCents(), p.getInventory());
+            return repository.findById(id)
+                .<ResponseEntity<?>>map(e -> {
+                    try {
+                        if (p.getName()!=null) e.setName(p.getName());
+                        if (p.getDescription()!=null) e.setDescription(p.getDescription());
+                        if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
+                        if (p.getSku()!=null) e.setSku(p.getSku());
+                        if (p.getInventory()!=null) e.setInventory(p.getInventory());
+                        if (image != null && !image.isEmpty()) {
+                            String oldImageUrl = e.getImageUrl();
+                            String newImageUrl = cloudinaryService.uploadImage(image);
+                            e.setImageUrl(newImageUrl);
+                            cloudinaryService.deleteImage(oldImageUrl);
+                        }
+                        repository.save(e);
+                        logger.info("[UPDATE PRODUCT] Product updated with id={}", e.getId());
+                        return ResponseEntity.ok(e);
+                    } catch (Exception ex) {
+                        logger.error("[UPDATE PRODUCT] Product update failed for id=" + id, ex);
+                        return ResponseEntity.internalServerError().body(Map.of("message", "Product update failed: " + ex.getMessage()));
                     }
-                    repository.save(e);
-                    logger.info("[UPDATE PRODUCT] Product updated with id={}", e.getId());
-                    return ResponseEntity.ok(e);
-                } catch (Exception ex) {
-                    logger.error("[UPDATE PRODUCT] Product update failed for id=" + id, ex);
-                    return ResponseEntity.internalServerError().body("Product update failed: " + ex.getMessage());
-                }
-            }).orElseGet(() -> {
-                logger.warn("[UPDATE PRODUCT] Product not found for id={}", id);
-                return ResponseEntity.notFound().build();
-            });
+                })
+                .orElseGet(() -> {
+                    logger.warn("[UPDATE PRODUCT] Product not found for id={}", id);
+                    return ResponseEntity.status(404).body(Map.of("message", "Product not found"));
+                });
         } catch (Exception e) {
             logger.error("[UPDATE PRODUCT] Product update failed for id=" + id, e);
-            return ResponseEntity.internalServerError().body("Product update failed: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Product update failed: " + e.getMessage()));
         }
     }
 
