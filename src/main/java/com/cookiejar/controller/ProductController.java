@@ -1,7 +1,9 @@
 package com.cookiejar.controller;
 
 import com.cookiejar.model.Product;
+import com.cookiejar.model.Variant;
 import com.cookiejar.repository.ProductRepository;
+import com.cookiejar.repository.VariantRepository;
 import com.cookiejar.service.CloudinaryService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,12 +22,14 @@ import java.util.Map;
 @RequestMapping("/api/products")
 public class ProductController {
     private final ProductRepository repository;
+    private final VariantRepository variantRepository;
     private final CloudinaryService cloudinaryService;
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
 
-    public ProductController(ProductRepository repository, CloudinaryService cloudinaryService) {
+    public ProductController(ProductRepository repository, VariantRepository variantRepository, CloudinaryService cloudinaryService) {
         this.repository = repository;
+        this.variantRepository = variantRepository;
         this.cloudinaryService = cloudinaryService;
     }
 
@@ -38,9 +42,28 @@ public class ProductController {
             logger.info("[CREATE PRODUCT] Received productJson: {}", productJson);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
-            // Debug: log the type and value of inventory
+            // Handle variants if present
             com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(productJson);
-            com.fasterxml.jackson.databind.JsonNode inventoryNode = rootNode.get("inventory");
+            com.fasterxml.jackson.databind.JsonNode variantsNode = rootNode.get("variants");
+            if (variantsNode != null && variantsNode.isArray()) {
+                p.getVariants().clear();
+                for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
+                    String vName = vNode.get("name").asText();
+                    int vInventory = vNode.get("inventory").asInt();
+                    int vPriceCents = vNode.has("priceCents")
+                        ? vNode.get("priceCents").asInt()
+                        : (vNode.has("price") ? (int) Math.round(vNode.get("price").asDouble() * 100) : 0);
+                    Variant variant = new Variant();
+                    variant.setName(vName);
+                    variant.setInventory(vInventory);
+                    variant.setPriceCents(vPriceCents);
+                    variant.setProduct(p);
+                    p.getVariants().add(variant);
+                }
+            }
+            // Debug: log the type and value of inventory
+            com.fasterxml.jackson.databind.JsonNode rootNode1 = mapper.readTree(productJson);
+            com.fasterxml.jackson.databind.JsonNode inventoryNode = rootNode1.get("inventory");
             logger.info(
                 "[CREATE PRODUCT] Parsed Product: name={}, priceCents={}, inventory={}, rawInventoryType={}, rawInventoryValue={}",
                 p.getName(),
@@ -54,11 +77,27 @@ public class ProductController {
                 return ResponseEntity.badRequest().body(Map.of("message", "name and priceCents required"));
             }
             if (p.getInventory() == null) p.setInventory(0);
+            // Set category if present in JSON
+            com.fasterxml.jackson.databind.JsonNode categoryNode = rootNode1.get("category");
+            if (categoryNode != null && !categoryNode.isNull()) {
+                p.setCategory(categoryNode.asText());
+            }
+            // Set minHours if present in JSON
+            com.fasterxml.jackson.databind.JsonNode minHoursNode = rootNode1.get("minHours");
+            if (minHoursNode != null && !minHoursNode.isNull() && minHoursNode.isInt()) {
+                p.setMinHours(minHoursNode.asInt());
+            }
             if (image != null && !image.isEmpty()) {
                 String imageUrl = cloudinaryService.uploadImage(image);
                 p.setImageUrl(imageUrl);
             }
             Product saved = repository.save(p);
+            if (p.getVariants() != null && !p.getVariants().isEmpty()) {
+                for (Variant v : p.getVariants()) {
+                    v.setProduct(saved);
+                }
+                variantRepository.saveAll(p.getVariants());
+            }
             logger.info("[CREATE PRODUCT] Product saved with id={}", saved.getId());
             return ResponseEntity.status(201).body(saved);
         } catch (Exception e) {
@@ -85,6 +124,8 @@ public class ProductController {
             logger.info("[UPDATE PRODUCT] Received productJson: {} for id={}", productJson, id);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
+            com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(productJson);
+            com.fasterxml.jackson.databind.JsonNode variantsNode = rootNode.get("variants");
             logger.info("[UPDATE PRODUCT] Parsed Product: name={}, priceCents={}, inventory={}", p.getName(), p.getPriceCents(), p.getInventory());
             return repository.findById(id)
                 .<ResponseEntity<?>>map(e -> {
@@ -94,11 +135,42 @@ public class ProductController {
                         if (p.getPriceCents()!=null) e.setPriceCents(p.getPriceCents());
                         if (p.getSku()!=null) e.setSku(p.getSku());
                         if (p.getInventory()!=null) e.setInventory(p.getInventory());
+                        if (p.getCategory()!=null) e.setCategory(p.getCategory());
+                        // Fix minHours update logic: prefer JSON node if present, fallback to POJO
+                        com.fasterxml.jackson.databind.JsonNode minHoursNode = rootNode.get("minHours");
+                        if (minHoursNode != null && !minHoursNode.isNull() && minHoursNode.isInt()) {
+                            e.setMinHours(minHoursNode.asInt());
+                        } else if (p.getMinHours() != null) {
+                            e.setMinHours(p.getMinHours());
+                        }
                         if (image != null && !image.isEmpty()) {
                             String oldImageUrl = e.getImageUrl();
                             String newImageUrl = cloudinaryService.uploadImage(image);
                             e.setImageUrl(newImageUrl);
                             cloudinaryService.deleteImage(oldImageUrl);
+                        }
+                        // Update variants if present
+                        if (variantsNode != null && variantsNode.isArray()) {
+                            e.getVariants().clear();
+                            for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
+                                String vName = vNode.get("name").asText();
+                                int vInventory = vNode.get("inventory").asInt();
+                                int vPriceCents = vNode.has("priceCents")
+                                    ? vNode.get("priceCents").asInt()
+                                    : (vNode.has("price") ? (int) Math.round(vNode.get("price").asDouble() * 100) : 0);
+                                Variant variant = new Variant();
+                                variant.setName(vName);
+                                variant.setInventory(vInventory);
+                                variant.setPriceCents(vPriceCents);
+                                // Also set price as double (for compatibility)
+                                if (vNode.has("price")) {
+                                    // Optionally, you could store this as a transient field or log it
+                                    // variant.setPrice(vNode.get("price").asDouble());
+                                }
+                                variant.setProduct(e);
+                                e.getVariants().add(variant);
+                            }
+                            variantRepository.saveAll(e.getVariants());
                         }
                         repository.save(e);
                         logger.info("[UPDATE PRODUCT] Product updated with id={}", e.getId());

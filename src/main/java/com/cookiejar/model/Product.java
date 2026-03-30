@@ -9,6 +9,9 @@ import java.util.List;
 @Entity
 @Table(name = "products")
 public class Product {
+        // Minimum hours before product can be delivered/edited
+        @Column(name = "min_hours", nullable = true)
+        private Integer minHours;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -22,6 +25,13 @@ public class Product {
     private String imageUrl;
     @Column(nullable = false)
     private Integer inventory;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonManagedReference
+    private List<Variant> variants = new ArrayList<>();
+
+    @Column(nullable = true)
+    private String category;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
     @Column(nullable = false)
@@ -53,4 +63,13 @@ public class Product {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public List<OrderItem> getOrderItems() { return orderItems; }
     public void setOrderItems(List<OrderItem> orderItems) { this.orderItems = orderItems; }
+
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+
+    public List<Variant> getVariants() { return variants; }
+    public void setVariants(List<Variant> variants) { this.variants = variants; }
+
+    public Integer getMinHours() { return minHours; }
+    public void setMinHours(Integer minHours) { this.minHours = minHours; }
 }
