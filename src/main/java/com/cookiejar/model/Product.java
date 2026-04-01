@@ -8,6 +8,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "products")
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class Product {
         // Minimum hours before product can be delivered/edited
         @Column(name = "min_hours", nullable = true)
@@ -23,6 +24,10 @@ public class Product {
     @Column(unique = true)
     private String sku;
     private String imageUrl;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "image_url")
+    private List<String> imageUrls = new ArrayList<>();
     @Column(nullable = false)
     private Integer inventory;
 
@@ -55,6 +60,8 @@ public class Product {
     public void setSku(String sku) { this.sku = sku; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public List<String> getImageUrls() { return imageUrls; }
+    public void setImageUrls(List<String> imageUrls) { this.imageUrls = imageUrls; }
     public Integer getInventory() { return inventory; }
     public void setInventory(Integer inventory) { this.inventory = inventory; }
     public Instant getCreatedAt() { return createdAt; }
