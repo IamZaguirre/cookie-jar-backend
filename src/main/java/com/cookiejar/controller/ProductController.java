@@ -8,13 +8,16 @@ import com.cookiejar.service.CloudinaryService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -36,8 +39,13 @@ public class ProductController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> create(
             @RequestPart("product") String productJson,
-            @RequestPart(value = "image", required = false) MultipartFile image
+            HttpServletRequest request
     ) {
+        List<MultipartFile> images = new ArrayList<>();
+        if (request instanceof MultipartHttpServletRequest) {
+            images = ((MultipartHttpServletRequest) request).getFiles("images");
+        }
+        logger.info("[CREATE PRODUCT] images count={}", images.size());
         try {
             logger.info("[CREATE PRODUCT] Received productJson: {}", productJson);
             ObjectMapper mapper = new ObjectMapper();
@@ -87,9 +95,18 @@ public class ProductController {
             if (minHoursNode != null && !minHoursNode.isNull() && minHoursNode.isInt()) {
                 p.setMinHours(minHoursNode.asInt());
             }
-            if (image != null && !image.isEmpty()) {
-                String imageUrl = cloudinaryService.uploadImage(image);
-                p.setImageUrl(imageUrl);
+            // Upload all images; first becomes imageUrl, rest go to imageUrls
+            if (images != null && !images.isEmpty()) {
+                List<String> uploadedUrls = new ArrayList<>();
+                for (MultipartFile img : images) {
+                    if (img != null && !img.isEmpty()) {
+                        uploadedUrls.add(cloudinaryService.uploadImage(img));
+                    }
+                }
+                if (!uploadedUrls.isEmpty()) {
+                    p.setImageUrl(uploadedUrls.get(0));
+                    p.setImageUrls(new ArrayList<>(uploadedUrls.subList(1, uploadedUrls.size())));
+                }
             }
             Product saved = repository.save(p);
             if (p.getVariants() != null && !p.getVariants().isEmpty()) {
@@ -118,15 +135,30 @@ public class ProductController {
     public ResponseEntity<?> update(
             @PathVariable("id") Long id,
             @RequestPart("product") String productJson,
-            @RequestPart(value = "image", required = false) MultipartFile image
+            HttpServletRequest request
     ) {
+        List<MultipartFile> imagesTmp = new ArrayList<>();
+        if (request instanceof MultipartHttpServletRequest) {
+            imagesTmp = ((MultipartHttpServletRequest) request).getFiles("images");
+        }
+        final List<MultipartFile> images = imagesTmp;
+        logger.info("[UPDATE PRODUCT] images count={}", images.size());
         try {
             logger.info("[UPDATE PRODUCT] Received productJson: {} for id={}", productJson, id);
             ObjectMapper mapper = new ObjectMapper();
             Product p = mapper.readValue(productJson, Product.class);
             com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(productJson);
             com.fasterxml.jackson.databind.JsonNode variantsNode = rootNode.get("variants");
-            logger.info("[UPDATE PRODUCT] Parsed Product: name={}, priceCents={}, inventory={}", p.getName(), p.getPriceCents(), p.getInventory());
+            // Parse keepImageUrls - existing URLs the client wants to retain
+            List<String> keepImageUrls = new ArrayList<>();
+            com.fasterxml.jackson.databind.JsonNode keepNode = rootNode.get("keepImageUrls");
+            if (keepNode != null && keepNode.isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode urlNode : keepNode) {
+                    keepImageUrls.add(urlNode.asText());
+                }
+            }
+            logger.info("[UPDATE PRODUCT] Parsed Product: name={}, priceCents={}, inventory={}, keepImageUrls={}", p.getName(), p.getPriceCents(), p.getInventory(), keepImageUrls);
+            final List<String> finalKeepImageUrls = keepImageUrls;
             return repository.findById(id)
                 .<ResponseEntity<?>>map(e -> {
                     try {
@@ -143,11 +175,33 @@ public class ProductController {
                         } else if (p.getMinHours() != null) {
                             e.setMinHours(p.getMinHours());
                         }
-                        if (image != null && !image.isEmpty()) {
-                            String oldImageUrl = e.getImageUrl();
-                            String newImageUrl = cloudinaryService.uploadImage(image);
-                            e.setImageUrl(newImageUrl);
-                            cloudinaryService.deleteImage(oldImageUrl);
+                        // Determine which old URLs are being removed and delete them from Cloudinary
+                        List<String> allOldUrls = new ArrayList<>();
+                        if (e.getImageUrl() != null) allOldUrls.add(e.getImageUrl());
+                        allOldUrls.addAll(e.getImageUrls());
+                        for (String oldUrl : allOldUrls) {
+                            if (!finalKeepImageUrls.contains(oldUrl)) {
+                                cloudinaryService.deleteImage(oldUrl);
+                            }
+                        }
+                        // Upload new images
+                        List<String> newUploadedUrls = new ArrayList<>();
+                        if (images != null) {
+                            for (MultipartFile img : images) {
+                                if (img != null && !img.isEmpty()) {
+                                    newUploadedUrls.add(cloudinaryService.uploadImage(img));
+                                }
+                            }
+                        }
+                        // Combine: kept existing first, then newly uploaded
+                        List<String> allUrls = new ArrayList<>(finalKeepImageUrls);
+                        allUrls.addAll(newUploadedUrls);
+                        if (!allUrls.isEmpty()) {
+                            e.setImageUrl(allUrls.get(0));
+                            e.setImageUrls(new ArrayList<>(allUrls.subList(1, allUrls.size())));
+                        } else {
+                            e.setImageUrl(null);
+                            e.setImageUrls(new ArrayList<>());
                         }
                         // Update variants if present
                         if (variantsNode != null && variantsNode.isArray()) {
@@ -162,11 +216,6 @@ public class ProductController {
                                 variant.setName(vName);
                                 variant.setInventory(vInventory);
                                 variant.setPriceCents(vPriceCents);
-                                // Also set price as double (for compatibility)
-                                if (vNode.has("price")) {
-                                    // Optionally, you could store this as a transient field or log it
-                                    // variant.setPrice(vNode.get("price").asDouble());
-                                }
                                 variant.setProduct(e);
                                 e.getVariants().add(variant);
                             }
@@ -213,6 +262,9 @@ public class ProductController {
     public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         return repository.findById(id).map(product -> {
             cloudinaryService.deleteImage(product.getImageUrl());
+            for (String url : product.getImageUrls()) {
+                cloudinaryService.deleteImage(url);
+            }
             repository.deleteById(id);
             return ResponseEntity.noContent().<Void>build();
         }).orElse(ResponseEntity.notFound().build());
