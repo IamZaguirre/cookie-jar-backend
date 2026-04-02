@@ -38,6 +38,17 @@ public class OrderController {
         return ResponseEntity.ok("All orders deleted");
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteOrder(@PathVariable("id") Long id) {
+        return orderRepository.findById(id).map(order -> {
+            if (order.getProofOfPaymentUrl() != null) {
+                cloudinaryService.deleteImage(order.getProofOfPaymentUrl());
+            }
+            orderRepository.deleteById(id);
+            return ResponseEntity.noContent().<Void>build();
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
         List<Map<String,Object>> items = (List<Map<String,Object>>) body.get("items");
