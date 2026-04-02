@@ -37,6 +37,8 @@ public class Product {
 
     @Column(nullable = true)
     private String category;
+    @Column(nullable = false, columnDefinition = "boolean NOT NULL DEFAULT true")
+    private Boolean active = true;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
     @Column(nullable = false)
@@ -79,4 +81,7 @@ public class Product {
 
     public Integer getMinHours() { return minHours; }
     public void setMinHours(Integer minHours) { this.minHours = minHours; }
+
+    public Boolean getActive() { return active; }
+    public void setActive(Boolean active) { this.active = active; }
 }

@@ -95,6 +95,13 @@ public class ProductController {
             if (minHoursNode != null && !minHoursNode.isNull() && minHoursNode.isInt()) {
                 p.setMinHours(minHoursNode.asInt());
             }
+            // Set active if present in JSON (defaults to true if absent)
+            com.fasterxml.jackson.databind.JsonNode activeNode = rootNode1.get("active");
+            if (activeNode != null && !activeNode.isNull()) {
+                p.setActive(activeNode.asBoolean());
+            } else {
+                p.setActive(true);
+            }
             // Upload all images; first becomes imageUrl, rest go to imageUrls
             if (images != null && !images.isEmpty()) {
                 List<String> uploadedUrls = new ArrayList<>();
@@ -174,6 +181,11 @@ public class ProductController {
                             e.setMinHours(minHoursNode.asInt());
                         } else if (p.getMinHours() != null) {
                             e.setMinHours(p.getMinHours());
+                        }
+                        // Handle active field
+                        com.fasterxml.jackson.databind.JsonNode activeNode = rootNode.get("active");
+                        if (activeNode != null && !activeNode.isNull()) {
+                            e.setActive(activeNode.asBoolean());
                         }
                         // Determine which old URLs are being removed and delete them from Cloudinary
                         List<String> allOldUrls = new ArrayList<>();
