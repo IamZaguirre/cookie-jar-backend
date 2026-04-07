@@ -13,6 +13,8 @@ public class Product {
         // Minimum hours before product can be delivered/edited
         @Column(name = "min_hours", nullable = true)
         private Integer minHours;
+        @Column(name = "discount_percent", nullable = true)
+        private Double discountPercent;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -81,6 +83,9 @@ public class Product {
 
     public Integer getMinHours() { return minHours; }
     public void setMinHours(Integer minHours) { this.minHours = minHours; }
+
+    public Double getDiscountPercent() { return discountPercent; }
+    public void setDiscountPercent(Double discountPercent) { this.discountPercent = discountPercent; }
 
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }

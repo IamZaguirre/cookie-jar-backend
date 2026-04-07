@@ -65,6 +65,9 @@ public class ProductController {
                     variant.setName(vName);
                     variant.setInventory(vInventory);
                     variant.setPriceCents(vPriceCents);
+                    if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
+                        variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
+                    }
                     variant.setProduct(p);
                     p.getVariants().add(variant);
                 }
@@ -94,6 +97,11 @@ public class ProductController {
             com.fasterxml.jackson.databind.JsonNode minHoursNode = rootNode1.get("minHours");
             if (minHoursNode != null && !minHoursNode.isNull() && minHoursNode.isInt()) {
                 p.setMinHours(minHoursNode.asInt());
+            }
+            // Set discountPercent if present in JSON
+            com.fasterxml.jackson.databind.JsonNode discountNode = rootNode1.get("discountPercent");
+            if (discountNode != null && !discountNode.isNull() && discountNode.isNumber()) {
+                p.setDiscountPercent(discountNode.asDouble());
             }
             // Set active if present in JSON (defaults to true if absent)
             com.fasterxml.jackson.databind.JsonNode activeNode = rootNode1.get("active");
@@ -182,6 +190,13 @@ public class ProductController {
                         } else if (p.getMinHours() != null) {
                             e.setMinHours(p.getMinHours());
                         }
+                        // Handle discountPercent field
+                        com.fasterxml.jackson.databind.JsonNode discountNode = rootNode.get("discountPercent");
+                        if (discountNode != null && !discountNode.isNull() && discountNode.isNumber()) {
+                            e.setDiscountPercent(discountNode.asDouble());
+                        } else if (discountNode != null && discountNode.isNull()) {
+                            e.setDiscountPercent(null);
+                        }
                         // Handle active field
                         com.fasterxml.jackson.databind.JsonNode activeNode = rootNode.get("active");
                         if (activeNode != null && !activeNode.isNull()) {
@@ -228,6 +243,9 @@ public class ProductController {
                                 variant.setName(vName);
                                 variant.setInventory(vInventory);
                                 variant.setPriceCents(vPriceCents);
+                                if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
+                                    variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
+                                }
                                 variant.setProduct(e);
                                 e.getVariants().add(variant);
                             }

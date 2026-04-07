@@ -18,6 +18,9 @@ public class Variant {
     @Column(nullable = false)
     private Integer priceCents;
 
+    @Column(name = "discount_percent", nullable = true)
+    private Double discountPercent;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     @com.fasterxml.jackson.annotation.JsonBackReference
@@ -40,6 +43,8 @@ public class Variant {
     public void setInventory(Integer inventory) { this.inventory = inventory; }
     public Integer getPriceCents() { return priceCents; }
     public void setPriceCents(Integer priceCents) { this.priceCents = priceCents; }
+    public Double getDiscountPercent() { return discountPercent; }
+    public void setDiscountPercent(Double discountPercent) { this.discountPercent = discountPercent; }
     public Product getProduct() { return product; }
     public void setProduct(Product product) { this.product = product; }
 }
