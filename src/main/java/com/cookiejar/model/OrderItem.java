@@ -20,6 +20,8 @@ public class OrderItem {
     private Integer quantity;
     @Column(nullable = false)
     private Integer unitPrice;
+    @Column
+    private String variantName;
     public OrderItem() {}
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -31,4 +33,6 @@ public class OrderItem {
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public Integer getUnitPrice() { return unitPrice; }
     public void setUnitPrice(Integer unitPrice) { this.unitPrice = unitPrice; }
+    public String getVariantName() { return variantName; }
+    public void setVariantName(String variantName) { this.variantName = variantName; }
 }

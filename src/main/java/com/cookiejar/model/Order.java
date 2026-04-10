@@ -1,6 +1,7 @@
 package com.cookiejar.model;
 
 import jakarta.persistence.*;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,9 +9,11 @@ import java.util.List;
 @Entity
 @Table(name = "orders")
 public class Order {
+    private static final String ALPHANUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
     @Column(nullable = false)
     private String status;
     @Column(nullable = false)
@@ -23,14 +26,31 @@ public class Order {
     private String email;
     private String phone;
     private String proofOfPaymentUrl;
+    @ElementCollection
+    @CollectionTable(name = "order_proof_images", joinColumns = @JoinColumn(name = "order_id"))
+    @Column(name = "image_url")
+    @OrderColumn(name = "position")
+    private List<String> proofOfPaymentUrls = new ArrayList<>();
     @ManyToOne
     @JoinColumn(name = "created_by_id")
     private Admin createdBy;
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<OrderItem> items = new ArrayList<>();
+
+    @PrePersist
+    public void prePersist() {
+        if (this.id == null) {
+            StringBuilder sb = new StringBuilder(10);
+            for (int i = 0; i < 10; i++) {
+                sb.append(ALPHANUM.charAt(RANDOM.nextInt(ALPHANUM.length())));
+            }
+            this.id = sb.toString();
+        }
+    }
+
     public Order() {}
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Integer getTotalCents() { return totalCents; }
@@ -49,6 +69,8 @@ public class Order {
     public void setPhone(String phone) { this.phone = phone; }
     public String getProofOfPaymentUrl() { return proofOfPaymentUrl; }
     public void setProofOfPaymentUrl(String proofOfPaymentUrl) { this.proofOfPaymentUrl = proofOfPaymentUrl; }
+    public List<String> getProofOfPaymentUrls() { return proofOfPaymentUrls; }
+    public void setProofOfPaymentUrls(List<String> proofOfPaymentUrls) { this.proofOfPaymentUrls = proofOfPaymentUrls; }
     public Admin getCreatedBy() { return createdBy; }
     public void setCreatedBy(Admin createdBy) { this.createdBy = createdBy; }
     public List<OrderItem> getItems() { return items; }
