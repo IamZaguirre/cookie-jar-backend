@@ -58,6 +58,7 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
+        System.out.println("[Order] POST /api/orders received: " + body);
         List<Map<String,Object>> items = (List<Map<String,Object>>) body.get("items");
         Number createdById = (Number) body.get("createdById");
         String neededAtValue = body.get("neededAt") instanceof String ? ((String) body.get("neededAt")).trim() : null;
@@ -86,13 +87,14 @@ public class OrderController {
             Long productId = ((Number)i.get("productId")).longValue();
             int qty = ((Number)i.get("quantity")).intValue();
             Long variantId = i.get("variantId") instanceof Number ? ((Number)i.get("variantId")).longValue() : null;
+            System.out.println("[Order] Processing item: productId=" + productId + " variantId=" + variantId + " qty=" + qty);
             Product p = productRepository.findById(productId).orElse(null);
-            if (p == null) return ResponseEntity.badRequest().body("product not found");
+            if (p == null) { System.out.println("[Order] Product not found: " + productId); return ResponseEntity.badRequest().body("product not found"); }
             int unitPrice;
             String variantName = null;
             if (variantId != null) {
                 Variant v = variantRepository.findById(variantId).orElse(null);
-                if (v == null) return ResponseEntity.badRequest().body("variant not found");
+                if (v == null) { System.out.println("[Order] Variant not found: " + variantId); return ResponseEntity.badRequest().body("variant not found"); }
                 double discount = (v.getDiscountPercent() != null && v.getDiscountPercent() > 0)
                         ? v.getDiscountPercent()
                         : (p.getDiscountPercent() != null ? p.getDiscountPercent() : 0);
@@ -110,6 +112,7 @@ public class OrderController {
                 p.setInventory(p.getInventory() - qty);
                 productRepository.save(p);
             }
+            System.out.println("[Order] Item ready: name=" + p.getName() + " variantName=" + variantName + " unitPrice=" + unitPrice);
             OrderItem oi = new OrderItem();
             oi.setProduct(p);
             oi.setQuantity(qty);
@@ -121,21 +124,22 @@ public class OrderController {
         }
         order.setTotalCents(total);
         order.setItems(orderItems);
-        Order savedOrder = orderRepository.save(order);
+        System.out.println("[Order] Saving order, total=" + total + " items=" + orderItems.size());
+        Order savedOrder;
+        try {
+            savedOrder = orderRepository.save(order);
+        } catch (Exception e) {
+            System.err.println("[Order] Failed to save order: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Failed to save order: " + e.getMessage());
+        }
+        System.out.println("[Order] Saved order id=" + savedOrder.getId());
         try {
             emailService.sendNewOrderNotification(savedOrder);
             emailService.sendOrderConfirmationToCustomer(savedOrder);
         } catch (Exception e) {
-            // Rollback: delete order and restore inventory
-            orderRepository.deleteById(savedOrder.getId());
-            for (OrderItem oi : orderItems) {
-                Product p = oi.getProduct();
-                p.setInventory(p.getInventory() + oi.getQuantity());
-                productRepository.save(p);
-            }
-            return ResponseEntity.internalServerError().body("Order not placed: failed to send notification email.");
+            System.err.println("[Email] Failed to send order notification for " + savedOrder.getId() + ": " + e.getMessage());
         }
-        // Only return the id to the client to ensure a valid id is always present
         return ResponseEntity.status(201).body(java.util.Collections.singletonMap("id", savedOrder.getId()));
     }
 
@@ -150,12 +154,13 @@ public class OrderController {
       String status=body.get("status"); if(status==null)return ResponseEntity.badRequest().body("status required");
       return orderRepository.findById(id).map(o -> {
           o.setStatus(status);
+          Order updated = orderRepository.save(o);
           try {
-              emailService.sendStatusUpdateNotification(o);
+              emailService.sendStatusUpdateNotification(updated);
           } catch (Exception e) {
-              return ResponseEntity.internalServerError().body("Status not updated: failed to send notification email.");
+              System.err.println("[Email] Failed to send status update for " + id + ": " + e.getMessage());
           }
-          return ResponseEntity.ok(orderRepository.save(o));
+          return ResponseEntity.ok(updated);
       }).orElse(ResponseEntity.notFound().build());
     }
 
