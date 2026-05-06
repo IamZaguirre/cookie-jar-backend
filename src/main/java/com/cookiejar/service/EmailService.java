@@ -2,14 +2,14 @@ package com.cookiejar.service;
 
 import com.cookiejar.model.Order;
 import com.cookiejar.model.OrderItem;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import jakarta.mail.internet.MimeMessage;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -18,37 +18,67 @@ import java.util.Locale;
 @Service
 public class EmailService {
 
-    private final JavaMailSender mailSender;
-    private final String adminEmail;
+    private final String apiKey;
     private final String fromEmail;
+    private final String adminEmail;
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    public EmailService(@Autowired(required = false) JavaMailSender mailSender,
-                        @Value("${app.admin-email:}") String adminEmail,
-                        @Value("${spring.mail.username:}") String fromEmail) {
-        this.mailSender = mailSender;
-        this.adminEmail = adminEmail;
+    public EmailService(@Value("${resend.api-key:}") String apiKey,
+                        @Value("${resend.from-email:onboarding@resend.dev}") String fromEmail,
+                        @Value("${app.admin-email:}") String adminEmail) {
+        this.apiKey = apiKey;
         this.fromEmail = fromEmail;
-        System.out.println("[Email] EmailService initialized. mailSender=" + (mailSender != null ? "configured" : "NULL")
+        this.adminEmail = adminEmail;
+        System.out.println("[Email] EmailService initialized. apiKey=" + (apiKey.isBlank() ? "MISSING" : "configured")
                 + " fromEmail=" + (fromEmail.isBlank() ? "MISSING" : fromEmail)
                 + " adminEmail=" + (adminEmail.isBlank() ? "MISSING" : adminEmail));
     }
 
     private void send(String to, String subject, String html) {
-        if (mailSender == null) { System.out.println("[Email] Mail not configured, skipping email to " + to); return; }
+        if (apiKey.isBlank()) { System.out.println("[Email] RESEND_API_KEY not configured, skipping email to " + to); return; }
         System.out.println("[Email] Sending to=" + to + " subject=\"" + subject + "\"");
         try {
-            MimeMessage msg = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(html, true);
-            mailSender.send(msg);
-            System.out.println("[Email] Sent OK to " + to);
+            String body = "{\"from\":\"" + escape(fromEmail) + "\","
+                    + "\"to\":[\"" + escape(to) + "\"],"
+                    + "\"subject\":\"" + escape(subject) + "\","
+                    + "\"html\":" + jsonString(html) + "}";
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.resend.com/emails"))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                System.out.println("[Email] Sent OK to " + to);
+            } else {
+                System.err.println("[Email] Resend returned " + response.statusCode() + " for " + to + ": " + response.body());
+            }
         } catch (Exception e) {
             System.err.println("[Email] Failed to send to " + to + ": " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static String escape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    private static String jsonString(String s) {
+        if (s == null) return "\"\"";
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"') sb.append("\\\"");
+            else if (c == '\\') sb.append("\\\\");
+            else if (c == '\n') sb.append("\\n");
+            else if (c == '\r') sb.append("\\r");
+            else if (c == '\t') sb.append("\\t");
+            else sb.append(c);
+        }
+        sb.append("\"");
+        return sb.toString();
     }
 
     @Async
@@ -84,18 +114,27 @@ public class EmailService {
     }
 
     public void sendRepaymentRequestEmail(Order order, String message) {
-        if (mailSender == null) { throw new RuntimeException("Mail not configured"); }
+        if (apiKey.isBlank()) { throw new RuntimeException("RESEND_API_KEY not configured"); }
         if (order.getEmail() == null || order.getEmail().isBlank()) return;
         System.out.println("[Email] Sending repayment request for order " + order.getId() + " to " + order.getEmail());
         try {
-            MimeMessage msg = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(order.getEmail());
-            helper.setSubject("Action Required: Repayment Request for " + formatOrderNumber(order));
-            helper.setText(buildRepaymentRequestHtml(order, message), true);
-            mailSender.send(msg);
+            String body = "{\"from\":\"" + escape(fromEmail) + "\","
+                    + "\"to\":[\"" + escape(order.getEmail()) + "\"],"
+                    + "\"subject\":\"" + escape("Action Required: Repayment Request for " + formatOrderNumber(order)) + "\","
+                    + "\"html\":" + jsonString(buildRepaymentRequestHtml(order, message)) + "}";
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.resend.com/emails"))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new RuntimeException("Resend returned " + response.statusCode() + ": " + response.body());
+            }
             System.out.println("[Email] Repayment request sent OK for order " + order.getId());
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             System.err.println("[Email] Failed to send repayment request for order " + order.getId() + ": " + e.getMessage());
             throw new RuntimeException("Failed to send repayment request email: " + e.getMessage(), e);
