@@ -24,7 +24,7 @@ public class AdminController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> get(@PathVariable Long id) {
+    public ResponseEntity<?> get(@PathVariable("id") Long id) {
         Optional<Admin> a = repository.findById(id);
         if (a.isEmpty()) return ResponseEntity.notFound().build();
         Admin admin = a.get();
@@ -33,7 +33,7 @@ public class AdminController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Admin admin) {
+    public ResponseEntity<?> update(@PathVariable("id") Long id, @RequestBody Admin admin) {
         return repository.findById(id).map(e -> {
             if (admin.getName() != null) e.setName(admin.getName());
             if (admin.getPassword() != null) e.setPassword(admin.getPassword());
@@ -44,7 +44,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         if (!repository.existsById(id)) return ResponseEntity.notFound().build();
         repository.deleteById(id);
         return ResponseEntity.noContent().build();
