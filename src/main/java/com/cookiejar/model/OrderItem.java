@@ -20,6 +20,8 @@ public class OrderItem {
     private Integer quantity;
     @Column(nullable = false)
     private Integer unitPrice;
+    @Column(columnDefinition = "integer not null default 0")
+    private Integer addOnTotalCents = 0;
     @Column
     private String variantName;
     public OrderItem() {}
@@ -33,6 +35,8 @@ public class OrderItem {
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public Integer getUnitPrice() { return unitPrice; }
     public void setUnitPrice(Integer unitPrice) { this.unitPrice = unitPrice; }
+    public Integer getAddOnTotalCents() { return addOnTotalCents != null ? addOnTotalCents : 0; }
+    public void setAddOnTotalCents(Integer addOnTotalCents) { this.addOnTotalCents = addOnTotalCents != null ? addOnTotalCents : 0; }
     public String getVariantName() { return variantName; }
     public void setVariantName(String variantName) { this.variantName = variantName; }
 }

@@ -1,10 +1,12 @@
 package com.cookiejar.controller;
 
+import com.cookiejar.model.AddOn;
 import com.cookiejar.model.Admin;
 import com.cookiejar.model.Order;
 import com.cookiejar.model.OrderItem;
 import com.cookiejar.model.Product;
 import com.cookiejar.model.Variant;
+import com.cookiejar.repository.AddOnRepository;
 import com.cookiejar.repository.AdminRepository;
 import com.cookiejar.repository.OrderRepository;
 import com.cookiejar.repository.ProductRepository;
@@ -26,14 +28,16 @@ public class OrderController {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final VariantRepository variantRepository;
+    private final AddOnRepository addOnRepository;
     private final AdminRepository adminRepository;
     private final CloudinaryService cloudinaryService;
     private final EmailService emailService;
 
-    public OrderController(OrderRepository orderRepository, ProductRepository productRepository, VariantRepository variantRepository, AdminRepository adminRepository, CloudinaryService cloudinaryService, EmailService emailService) {
+    public OrderController(OrderRepository orderRepository, ProductRepository productRepository, VariantRepository variantRepository, AddOnRepository addOnRepository, AdminRepository adminRepository, CloudinaryService cloudinaryService, EmailService emailService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
+        this.addOnRepository = addOnRepository;
         this.adminRepository = adminRepository;
         this.cloudinaryService = cloudinaryService;
         this.emailService = emailService;
@@ -87,6 +91,7 @@ public class OrderController {
             Long productId = ((Number)i.get("productId")).longValue();
             int qty = ((Number)i.get("quantity")).intValue();
             Long variantId = i.get("variantId") instanceof Number ? ((Number)i.get("variantId")).longValue() : null;
+            List<Map<String, Object>> selectedAddOns = i.get("selectedAddOns") instanceof List<?> ? (List<Map<String, Object>>) i.get("selectedAddOns") : List.of();
             System.out.println("[Order] Processing item: productId=" + productId + " variantId=" + variantId + " qty=" + qty);
             Product p = productRepository.findById(productId).orElse(null);
             if (p == null) { System.out.println("[Order] Product not found: " + productId); return ResponseEntity.badRequest().body("product not found"); }
@@ -112,15 +117,36 @@ public class OrderController {
                 p.setInventory(p.getInventory() - qty);
                 productRepository.save(p);
             }
-            System.out.println("[Order] Item ready: name=" + p.getName() + " variantName=" + variantName + " unitPrice=" + unitPrice);
+            List<String> addOnNames = new ArrayList<>();
+            int addOnTotalCents = 0;
+            for (Map<String, Object> selectedAddOn : selectedAddOns) {
+                Long addOnId = selectedAddOn.get("id") instanceof Number ? ((Number) selectedAddOn.get("id")).longValue() : null;
+                if (addOnId == null) {
+                    return ResponseEntity.badRequest().body("selected add-on id required");
+                }
+                AddOn addOn = addOnRepository.findById(addOnId).orElse(null);
+                if (addOn == null || addOn.getProduct() == null || !productId.equals(addOn.getProduct().getId())) {
+                    return ResponseEntity.badRequest().body("invalid add-on selected");
+                }
+                addOnTotalCents += addOn.getPriceCents();
+                addOnNames.add(addOn.getName());
+            }
+            if (!addOnNames.isEmpty()) {
+                String addOnSummary = "Add-ons: " + String.join(", ", addOnNames);
+                variantName = (variantName == null || variantName.isBlank())
+                        ? addOnSummary
+                        : variantName + " + " + addOnSummary;
+            }
+            System.out.println("[Order] Item ready: name=" + p.getName() + " variantName=" + variantName + " unitPrice=" + unitPrice + " addOnTotalCents=" + addOnTotalCents);
             OrderItem oi = new OrderItem();
             oi.setProduct(p);
             oi.setQuantity(qty);
             oi.setUnitPrice(unitPrice);
+            oi.setAddOnTotalCents(addOnTotalCents);
             oi.setVariantName(variantName);
             oi.setOrder(order);
             orderItems.add(oi);
-            total += unitPrice*qty;
+            total += unitPrice * qty + addOnTotalCents;
         }
         order.setTotalCents(total);
         order.setItems(orderItems);

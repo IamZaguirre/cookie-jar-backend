@@ -2,8 +2,10 @@ package com.cookiejar.controller;
 
 import com.cookiejar.model.Product;
 import com.cookiejar.model.Variant;
+import com.cookiejar.model.AddOn;
 import com.cookiejar.repository.ProductRepository;
 import com.cookiejar.repository.VariantRepository;
+import com.cookiejar.repository.AddOnRepository;
 import com.cookiejar.service.CloudinaryService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -26,13 +28,15 @@ import java.util.Map;
 public class ProductController {
     private final ProductRepository repository;
     private final VariantRepository variantRepository;
+    private final AddOnRepository addOnRepository;
     private final CloudinaryService cloudinaryService;
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
 
-    public ProductController(ProductRepository repository, VariantRepository variantRepository, CloudinaryService cloudinaryService) {
+    public ProductController(ProductRepository repository, VariantRepository variantRepository, AddOnRepository addOnRepository, CloudinaryService cloudinaryService) {
         this.repository = repository;
         this.variantRepository = variantRepository;
+        this.addOnRepository = addOnRepository;
         this.cloudinaryService = cloudinaryService;
     }
 
@@ -54,7 +58,7 @@ public class ProductController {
             com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(productJson);
             com.fasterxml.jackson.databind.JsonNode variantsNode = rootNode.get("variants");
             if (variantsNode != null && variantsNode.isArray()) {
-                p.getVariants().clear();
+                List<Variant> parsedVariants = new ArrayList<>();
                 for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
                     String vName = vNode.get("name").asText();
                     int vInventory = vNode.get("inventory").asInt();
@@ -68,9 +72,24 @@ public class ProductController {
                     if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
                         variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
                     }
-                    variant.setProduct(p);
-                    p.getVariants().add(variant);
+                    parsedVariants.add(variant);
                 }
+                p.setVariants(parsedVariants);
+            }
+            // Parse addOns if present
+            com.fasterxml.jackson.databind.JsonNode addOnsNode = rootNode.get("addOns");
+            if (addOnsNode != null && addOnsNode.isArray()) {
+                List<AddOn> parsedAddOns = new ArrayList<>();
+                for (com.fasterxml.jackson.databind.JsonNode aNode : addOnsNode) {
+                    String aName = aNode.get("name").asText();
+                    int aPriceCents = aNode.has("priceCents") ? aNode.get("priceCents").asInt() : 0;
+                    AddOn addOn = new AddOn();
+                    addOn.setName(aName);
+                    addOn.setPriceCents(aPriceCents);
+                    parsedAddOns.add(addOn);
+                }
+                p.setAddOns(parsedAddOns);
+                logger.info("[CREATE PRODUCT] Parsed {} add-ons", parsedAddOns.size());
             }
             // Debug: log the type and value of inventory
             com.fasterxml.jackson.databind.JsonNode rootNode1 = mapper.readTree(productJson);
@@ -130,6 +149,13 @@ public class ProductController {
                 }
                 variantRepository.saveAll(p.getVariants());
             }
+            if (p.getAddOns() != null && !p.getAddOns().isEmpty()) {
+                for (AddOn addOn : p.getAddOns()) {
+                    addOn.setProduct(saved);
+                }
+                addOnRepository.saveAll(p.getAddOns());
+                logger.info("[CREATE PRODUCT] Saved {} add-ons for product id={}", p.getAddOns().size(), saved.getId());
+            }
             logger.info("[CREATE PRODUCT] Product saved with id={}", saved.getId());
             return ResponseEntity.status(201).body(saved);
         } catch (Exception e) {
@@ -140,6 +166,11 @@ public class ProductController {
 
     @GetMapping
     public List<Product> list() { return repository.findAll(); }
+
+    @GetMapping("/most-ordered")
+    public List<Product> mostOrdered(@RequestParam(name = "limit", defaultValue = "5") int limit) {
+        return repository.findMostOrdered(limit);
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<Product> get(@PathVariable("id") Long id) {
@@ -232,7 +263,7 @@ public class ProductController {
                         }
                         // Update variants if present
                         if (variantsNode != null && variantsNode.isArray()) {
-                            e.getVariants().clear();
+                            List<Variant> parsedVariants = new ArrayList<>();
                             for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
                                 String vName = vNode.get("name").asText();
                                 int vInventory = vNode.get("inventory").asInt();
@@ -246,10 +277,26 @@ public class ProductController {
                                 if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
                                     variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
                                 }
-                                variant.setProduct(e);
-                                e.getVariants().add(variant);
+                                parsedVariants.add(variant);
                             }
+                            e.setVariants(parsedVariants);
                             variantRepository.saveAll(e.getVariants());
+                        }
+                        // Update add-ons if present
+                        com.fasterxml.jackson.databind.JsonNode addOnsNode = rootNode.get("addOns");
+                        if (addOnsNode != null && addOnsNode.isArray()) {
+                            List<AddOn> parsedAddOns = new ArrayList<>();
+                            for (com.fasterxml.jackson.databind.JsonNode aNode : addOnsNode) {
+                                String aName = aNode.get("name").asText();
+                                int aPriceCents = aNode.has("priceCents") ? aNode.get("priceCents").asInt() : 0;
+                                AddOn addOn = new AddOn();
+                                addOn.setName(aName);
+                                addOn.setPriceCents(aPriceCents);
+                                parsedAddOns.add(addOn);
+                            }
+                            e.setAddOns(parsedAddOns);
+                            addOnRepository.saveAll(e.getAddOns());
+                            logger.info("[UPDATE PRODUCT] Saved {} add-ons for product id={}", e.getAddOns().size(), e.getId());
                         }
                         repository.save(e);
                         logger.info("[UPDATE PRODUCT] Product updated with id={}", e.getId());

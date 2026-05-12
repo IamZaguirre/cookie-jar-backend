@@ -37,6 +37,10 @@ public class Product {
     @com.fasterxml.jackson.annotation.JsonManagedReference
     private List<Variant> variants = new ArrayList<>();
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonManagedReference("product-addons")
+    private List<AddOn> addOns = new ArrayList<>();
+
     @Column(nullable = true)
     private String category;
     @Column(nullable = false, columnDefinition = "boolean NOT NULL DEFAULT true")
@@ -79,7 +83,28 @@ public class Product {
     public void setCategory(String category) { this.category = category; }
 
     public List<Variant> getVariants() { return variants; }
-    public void setVariants(List<Variant> variants) { this.variants = variants; }
+    public void setVariants(List<Variant> variants) {
+        this.variants.clear();
+        if (variants == null) {
+            return;
+        }
+        for (Variant variant : variants) {
+            variant.setProduct(this);
+            this.variants.add(variant);
+        }
+    }
+
+    public List<AddOn> getAddOns() { return addOns; }
+    public void setAddOns(List<AddOn> addOns) {
+        this.addOns.clear();
+        if (addOns == null) {
+            return;
+        }
+        for (AddOn addOn : addOns) {
+            addOn.setProduct(this);
+            this.addOns.add(addOn);
+        }
+    }
 
     public Integer getMinHours() { return minHours; }
     public void setMinHours(Integer minHours) { this.minHours = minHours; }
