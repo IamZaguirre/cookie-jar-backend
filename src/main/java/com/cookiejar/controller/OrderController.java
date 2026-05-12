@@ -131,22 +131,22 @@ public class OrderController {
                 addOnTotalCents += addOn.getPriceCents();
                 addOnNames.add(addOn.getName());
             }
-            unitPrice += addOnTotalCents;
             if (!addOnNames.isEmpty()) {
                 String addOnSummary = "Add-ons: " + String.join(", ", addOnNames);
                 variantName = (variantName == null || variantName.isBlank())
                         ? addOnSummary
                         : variantName + " + " + addOnSummary;
             }
-            System.out.println("[Order] Item ready: name=" + p.getName() + " variantName=" + variantName + " unitPrice=" + unitPrice);
+            System.out.println("[Order] Item ready: name=" + p.getName() + " variantName=" + variantName + " unitPrice=" + unitPrice + " addOnTotalCents=" + addOnTotalCents);
             OrderItem oi = new OrderItem();
             oi.setProduct(p);
             oi.setQuantity(qty);
             oi.setUnitPrice(unitPrice);
+            oi.setAddOnTotalCents(addOnTotalCents);
             oi.setVariantName(variantName);
             oi.setOrder(order);
             orderItems.add(oi);
-            total += unitPrice*qty;
+            total += unitPrice * qty + addOnTotalCents;
         }
         order.setTotalCents(total);
         order.setItems(orderItems);

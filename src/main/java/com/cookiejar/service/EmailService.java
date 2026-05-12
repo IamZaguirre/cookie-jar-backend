@@ -147,10 +147,14 @@ public class EmailService {
         for (OrderItem item : order.getItems()) {
             String displayName = item.getProduct().getName();
             if (item.getVariantName() != null && !item.getVariantName().isBlank()) displayName += " (" + item.getVariantName() + ")";
+            String unitPriceDisplay = currency.format(item.getUnitPrice() / 100.0);
+            if (item.getAddOnTotalCents() != null && item.getAddOnTotalCents() > 0) {
+                unitPriceDisplay += "<br><span style='font-size:12px;color:#666;'>+ add-ons " + currency.format(item.getAddOnTotalCents() / 100.0) + "</span>";
+            }
             rows.append("<tr>")
                 .append("<td style='padding:6px 12px;border-bottom:1px solid #eee;'>").append(displayName).append("</td>")
                 .append("<td style='padding:6px 12px;text-align:center;border-bottom:1px solid #eee;'>").append(item.getQuantity()).append("</td>")
-                .append("<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #eee;'>").append(currency.format(item.getUnitPrice() / 100.0)).append("</td>")
+                .append("<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #eee;'>").append(unitPriceDisplay).append("</td>")
                 .append("</tr>");
         }
         String neededAt = order.getNeededAt() != null
@@ -183,10 +187,14 @@ public class EmailService {
         for (OrderItem item : order.getItems()) {
             String displayName = item.getProduct().getName();
             if (item.getVariantName() != null && !item.getVariantName().isBlank()) displayName += " (" + item.getVariantName() + ")";
+            String unitPriceDisplay = currency.format(item.getUnitPrice() / 100.0);
+            if (item.getAddOnTotalCents() != null && item.getAddOnTotalCents() > 0) {
+                unitPriceDisplay += "<br><span style='font-size:12px;color:#666;'>+ add-ons " + currency.format(item.getAddOnTotalCents() / 100.0) + "</span>";
+            }
             rows.append("<tr>")
                 .append("<td style='padding:6px 12px;border-bottom:1px solid #eee;'>").append(displayName).append("</td>")
                 .append("<td style='padding:6px 12px;text-align:center;border-bottom:1px solid #eee;'>").append(item.getQuantity()).append("</td>")
-                .append("<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #eee;'>").append(currency.format(item.getUnitPrice() / 100.0)).append("</td>")
+                .append("<td style='padding:6px 12px;text-align:right;border-bottom:1px solid #eee;'>").append(unitPriceDisplay).append("</td>")
                 .append("</tr>");
         }
         String neededAt = order.getNeededAt() != null
