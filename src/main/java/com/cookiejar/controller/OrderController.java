@@ -144,6 +144,7 @@ public class OrderController {
             oi.setUnitPrice(unitPrice);
             oi.setAddOnTotalCents(addOnTotalCents);
             oi.setVariantName(variantName);
+            oi.setCardMessage(i.get("cardMessage") instanceof String ? (String) i.get("cardMessage") : null);
             oi.setOrder(order);
             orderItems.add(oi);
             total += unitPrice * qty + addOnTotalCents;

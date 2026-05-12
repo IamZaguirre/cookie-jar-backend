@@ -24,6 +24,8 @@ public class OrderItem {
     private Integer addOnTotalCents = 0;
     @Column
     private String variantName;
+    @Column(columnDefinition = "text")
+    private String cardMessage;
     public OrderItem() {}
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -39,4 +41,6 @@ public class OrderItem {
     public void setAddOnTotalCents(Integer addOnTotalCents) { this.addOnTotalCents = addOnTotalCents != null ? addOnTotalCents : 0; }
     public String getVariantName() { return variantName; }
     public void setVariantName(String variantName) { this.variantName = variantName; }
+    public String getCardMessage() { return cardMessage; }
+    public void setCardMessage(String cardMessage) { this.cardMessage = cardMessage; }
 }
