@@ -27,8 +27,12 @@ public class CloudinaryService {
     }
 
     public String uploadImage(MultipartFile file) throws IOException {
+        return uploadImage(file, "cookie-jar/products");
+    }
+
+    public String uploadImage(MultipartFile file, String folder) throws IOException {
         Map<?, ?> result = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
-                "folder", "cookie-jar/products",
+                "folder", folder,
                 "resource_type", "image"
         ));
         return (String) result.get("secure_url");
