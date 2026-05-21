@@ -48,7 +48,12 @@ public class CloudinaryService {
         }
         try {
             cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            System.err.println("Cloudinary deletion failed for publicId: " + publicId);
+            e.printStackTrace();
+        } catch (RuntimeException e) {
+            System.err.println("Unexpected error during Cloudinary deletion for publicId: " + publicId);
+            e.printStackTrace();
         }
     }
 

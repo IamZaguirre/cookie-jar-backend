@@ -73,7 +73,7 @@ public class GalleryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         if (!repository.existsById(id)) return ResponseEntity.notFound().build();
         GalleryPhoto photo = repository.findById(id).get();
         cloudinaryService.deleteImage(photo.getImageUrl());
