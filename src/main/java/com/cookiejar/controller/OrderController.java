@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -118,6 +119,7 @@ public class OrderController {
                 productRepository.save(p);
             }
             List<String> addOnNames = new ArrayList<>();
+            Map<Long, String> selectedAddOnNamesById = new HashMap<>();
             int addOnTotalCents = 0;
             for (Map<String, Object> selectedAddOn : selectedAddOns) {
                 Long addOnId = selectedAddOn.get("id") instanceof Number ? ((Number) selectedAddOn.get("id")).longValue() : null;
@@ -130,6 +132,7 @@ public class OrderController {
                 }
                 addOnTotalCents += addOn.getPriceCents();
                 addOnNames.add(addOn.getName());
+                selectedAddOnNamesById.put(addOnId, addOn.getName());
             }
             if (!addOnNames.isEmpty()) {
                 String addOnSummary = "Add-ons: " + String.join(", ", addOnNames);
@@ -144,7 +147,34 @@ public class OrderController {
             oi.setUnitPrice(unitPrice);
             oi.setAddOnTotalCents(addOnTotalCents);
             oi.setVariantName(variantName);
-            oi.setCardMessage(i.get("cardMessage") instanceof String ? (String) i.get("cardMessage") : null);
+            List<OrderItem.CardMessageEntry> cardMessages = new ArrayList<>();
+            if (i.get("cardMessages") instanceof List<?> rawCardMessages) {
+                for (Object rawCardMessage : rawCardMessages) {
+                    if (!(rawCardMessage instanceof Map<?, ?> cardMessageMap)) {
+                        return ResponseEntity.badRequest().body("invalid card message entry");
+                    }
+                    Long addOnId = cardMessageMap.get("addOnId") instanceof Number
+                            ? ((Number) cardMessageMap.get("addOnId")).longValue()
+                            : null;
+                    if (addOnId == null || !selectedAddOnNamesById.containsKey(addOnId)) {
+                        return ResponseEntity.badRequest().body("card message add-on must match a selected add-on");
+                    }
+                    String message = cardMessageMap.get("message") instanceof String
+                            ? ((String) cardMessageMap.get("message")).trim()
+                            : "";
+                    if (message.isBlank()) {
+                        continue;
+                    }
+                    cardMessages.add(new OrderItem.CardMessageEntry(
+                            addOnId,
+                            selectedAddOnNamesById.get(addOnId),
+                            message
+                    ));
+                }
+            } else if (i.get("cardMessage") instanceof String cardMessage && !cardMessage.isBlank()) {
+                cardMessages.add(new OrderItem.CardMessageEntry(null, null, cardMessage.trim()));
+            }
+            oi.setCardMessages(cardMessages);
             oi.setOrder(order);
             orderItems.add(oi);
             total += unitPrice * qty + addOnTotalCents;

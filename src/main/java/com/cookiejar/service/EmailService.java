@@ -151,9 +151,7 @@ public class EmailService {
             if (item.getAddOnTotalCents() != null && item.getAddOnTotalCents() > 0) {
                 unitPriceDisplay += "<br><span style='font-size:12px;color:#666;'>+ add-ons " + currency.format(item.getAddOnTotalCents() / 100.0) + "</span>";
             }
-            if (item.getCardMessage() != null && !item.getCardMessage().isBlank()) {
-                displayName += "<br><span style='font-size:12px;color:#e91e8c;font-style:italic;'>Card: &ldquo;" + item.getCardMessage() + "&rdquo;</span>";
-            }
+            displayName += buildCardMessageHtml(item);
             rows.append("<tr>")
                 .append("<td style='padding:6px 12px;border-bottom:1px solid #eee;'>").append(displayName).append("</td>")
                 .append("<td style='padding:6px 12px;text-align:center;border-bottom:1px solid #eee;'>").append(item.getQuantity()).append("</td>")
@@ -194,9 +192,7 @@ public class EmailService {
             if (item.getAddOnTotalCents() != null && item.getAddOnTotalCents() > 0) {
                 unitPriceDisplay += "<br><span style='font-size:12px;color:#666;'>+ add-ons " + currency.format(item.getAddOnTotalCents() / 100.0) + "</span>";
             }
-            if (item.getCardMessage() != null && !item.getCardMessage().isBlank()) {
-                displayName += "<br><span style='font-size:12px;color:#e91e8c;font-style:italic;'>Card: &ldquo;" + item.getCardMessage() + "&rdquo;</span>";
-            }
+            displayName += buildCardMessageHtml(item);
             rows.append("<tr>")
                 .append("<td style='padding:6px 12px;border-bottom:1px solid #eee;'>").append(displayName).append("</td>")
                 .append("<td style='padding:6px 12px;text-align:center;border-bottom:1px solid #eee;'>").append(item.getQuantity()).append("</td>")
@@ -225,6 +221,24 @@ public class EmailService {
                 + "<p style='color:#666;font-size:0.9em;'>You will receive another email once your order status is updated.</p>"
                 + "<br/><p>Thank you for your order!</p>"
                 + "</body></html>";
+    }
+
+    private String buildCardMessageHtml(OrderItem item) {
+        StringBuilder html = new StringBuilder();
+        for (OrderItem.CardMessageEntry cardMessage : item.getCardMessages()) {
+            if (cardMessage.getMessage() == null || cardMessage.getMessage().isBlank()) {
+                continue;
+            }
+            String label = cardMessage.getAddOnName() != null && !cardMessage.getAddOnName().isBlank()
+                    ? cardMessage.getAddOnName() + ": "
+                    : "Card: ";
+            html.append("<br><span style='font-size:12px;color:#e91e8c;font-style:italic;'>")
+                    .append(label)
+                    .append("&ldquo;")
+                    .append(cardMessage.getMessage())
+                    .append("&rdquo;</span>");
+        }
+        return html.toString();
     }
 
     private String buildStatusUpdateHtml(Order order) {

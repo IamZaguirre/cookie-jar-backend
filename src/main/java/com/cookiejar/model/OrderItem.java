@@ -1,11 +1,19 @@
 package com.cookiejar.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "order_items")
 public class OrderItem {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -26,6 +34,9 @@ public class OrderItem {
     private String variantName;
     @Column(columnDefinition = "text")
     private String cardMessage;
+    @JsonIgnore
+    @Column(columnDefinition = "text")
+    private String cardMessagesJson;
     public OrderItem() {}
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -43,4 +54,76 @@ public class OrderItem {
     public void setVariantName(String variantName) { this.variantName = variantName; }
     public String getCardMessage() { return cardMessage; }
     public void setCardMessage(String cardMessage) { this.cardMessage = cardMessage; }
+    @Transient
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<CardMessageEntry> getCardMessages() {
+        if (cardMessagesJson != null && !cardMessagesJson.isBlank()) {
+            try {
+                return OBJECT_MAPPER.readValue(cardMessagesJson, new TypeReference<List<CardMessageEntry>>() {});
+            } catch (Exception ignored) {
+            }
+        }
+        if (cardMessage != null && !cardMessage.isBlank()) {
+            List<CardMessageEntry> legacyMessages = new ArrayList<>();
+            legacyMessages.add(new CardMessageEntry(null, null, cardMessage));
+            return legacyMessages;
+        }
+        return List.of();
+    }
+    public void setCardMessages(List<CardMessageEntry> cardMessages) {
+        List<CardMessageEntry> sanitizedMessages = new ArrayList<>();
+        if (cardMessages != null) {
+            for (CardMessageEntry cardMessageEntry : cardMessages) {
+                if (cardMessageEntry == null || cardMessageEntry.getMessage() == null) {
+                    continue;
+                }
+                String message = cardMessageEntry.getMessage().trim();
+                if (message.isBlank()) {
+                    continue;
+                }
+                sanitizedMessages.add(new CardMessageEntry(
+                    cardMessageEntry.getAddOnId(),
+                    cardMessageEntry.getAddOnName(),
+                    message
+                ));
+            }
+        }
+
+        if (sanitizedMessages.isEmpty()) {
+            this.cardMessagesJson = null;
+            this.cardMessage = null;
+            return;
+        }
+
+        try {
+            this.cardMessagesJson = OBJECT_MAPPER.writeValueAsString(sanitizedMessages);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize card messages", e);
+        }
+
+        this.cardMessage = sanitizedMessages.size() == 1
+                ? sanitizedMessages.get(0).getMessage()
+                : null;
+    }
+
+    public static class CardMessageEntry {
+        private Long addOnId;
+        private String addOnName;
+        private String message;
+
+        public CardMessageEntry() {}
+
+        public CardMessageEntry(Long addOnId, String addOnName, String message) {
+            this.addOnId = addOnId;
+            this.addOnName = addOnName;
+            this.message = message;
+        }
+
+        public Long getAddOnId() { return addOnId; }
+        public void setAddOnId(Long addOnId) { this.addOnId = addOnId; }
+        public String getAddOnName() { return addOnName; }
+        public void setAddOnName(String addOnName) { this.addOnName = addOnName; }
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+    }
 }
