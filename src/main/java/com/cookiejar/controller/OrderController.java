@@ -1,5 +1,6 @@
 package com.cookiejar.controller;
 
+import com.cookiejar.dto.CreateOrderRequest;
 import com.cookiejar.model.AddOn;
 import com.cookiejar.model.Admin;
 import com.cookiejar.model.Order;
@@ -62,19 +63,19 @@ public class OrderController {
     }
 
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> create(@RequestBody CreateOrderRequest body) {
         System.out.println("[Order] POST /api/orders received: " + body);
-        List<Map<String,Object>> items = (List<Map<String,Object>>) body.get("items");
-        Number createdById = (Number) body.get("createdById");
-        String neededAtValue = body.get("neededAt") instanceof String ? ((String) body.get("neededAt")).trim() : null;
+        List<CreateOrderRequest.OrderItemRequest> items = body.getItems();
+        Long createdById = body.getCreatedById();
+        String neededAtValue = body.getNeededAt() != null ? body.getNeededAt().trim() : null;
         if (items == null || items.isEmpty()) return ResponseEntity.badRequest().body("items required");
         Order order = new Order();
         order.setStatus("pending");
         order.setTotalCents(0);
-        order.setFirstName((String) body.get("firstName"));
-        order.setLastName((String) body.get("lastName"));
-        order.setEmail((String) body.get("email"));
-        order.setPhone((String) body.get("phone"));
+        order.setFirstName(body.getFirstName());
+        order.setLastName(body.getLastName());
+        order.setEmail(body.getEmail());
+        order.setPhone(body.getPhone());
         if (neededAtValue != null && !neededAtValue.isEmpty()) {
             try {
                 order.setNeededAt(Instant.parse(neededAtValue));
@@ -83,16 +84,16 @@ public class OrderController {
             }
         }
         if (createdById != null) {
-            Admin admin = adminRepository.findById(createdById.longValue()).orElse(null);
+            Admin admin = adminRepository.findById(createdById).orElse(null);
             order.setCreatedBy(admin);
         }
         List<OrderItem> orderItems = new ArrayList<>();
         int total=0;
-        for (Map<String,Object> i : items) {
-            Long productId = ((Number)i.get("productId")).longValue();
-            int qty = ((Number)i.get("quantity")).intValue();
-            Long variantId = i.get("variantId") instanceof Number ? ((Number)i.get("variantId")).longValue() : null;
-            List<Map<String, Object>> selectedAddOns = i.get("selectedAddOns") instanceof List<?> ? (List<Map<String, Object>>) i.get("selectedAddOns") : List.of();
+        for (CreateOrderRequest.OrderItemRequest i : items) {
+            Long productId = i.getProductId();
+            int qty = i.getQuantity();
+            Long variantId = i.getVariantId();
+            List<CreateOrderRequest.SelectedAddOnRequest> selectedAddOns = i.getSelectedAddOns() != null ? i.getSelectedAddOns() : List.of();
             System.out.println("[Order] Processing item: productId=" + productId + " variantId=" + variantId + " qty=" + qty);
             Product p = productRepository.findById(productId).orElse(null);
             if (p == null) { System.out.println("[Order] Product not found: " + productId); return ResponseEntity.badRequest().body("product not found"); }
@@ -121,8 +122,8 @@ public class OrderController {
             List<String> addOnNames = new ArrayList<>();
             Map<Long, String> selectedAddOnNamesById = new HashMap<>();
             int addOnTotalCents = 0;
-            for (Map<String, Object> selectedAddOn : selectedAddOns) {
-                Long addOnId = selectedAddOn.get("id") instanceof Number ? ((Number) selectedAddOn.get("id")).longValue() : null;
+            for (CreateOrderRequest.SelectedAddOnRequest selectedAddOn : selectedAddOns) {
+                Long addOnId = selectedAddOn.getId();
                 if (addOnId == null) {
                     return ResponseEntity.badRequest().body("selected add-on id required");
                 }
@@ -148,20 +149,13 @@ public class OrderController {
             oi.setAddOnTotalCents(addOnTotalCents);
             oi.setVariantName(variantName);
             List<OrderItem.CardMessageEntry> cardMessages = new ArrayList<>();
-            if (i.get("cardMessages") instanceof List<?> rawCardMessages) {
-                for (Object rawCardMessage : rawCardMessages) {
-                    if (!(rawCardMessage instanceof Map<?, ?> cardMessageMap)) {
-                        return ResponseEntity.badRequest().body("invalid card message entry");
-                    }
-                    Long addOnId = cardMessageMap.get("addOnId") instanceof Number
-                            ? ((Number) cardMessageMap.get("addOnId")).longValue()
-                            : null;
+            if (i.getCardMessages() != null) {
+                for (CreateOrderRequest.CardMessageRequest cardMessageReq : i.getCardMessages()) {
+                    Long addOnId = cardMessageReq.getAddOnId();
                     if (addOnId == null || !selectedAddOnNamesById.containsKey(addOnId)) {
                         return ResponseEntity.badRequest().body("card message add-on must match a selected add-on");
                     }
-                    String message = cardMessageMap.get("message") instanceof String
-                            ? ((String) cardMessageMap.get("message")).trim()
-                            : "";
+                    String message = cardMessageReq.getMessage() != null ? cardMessageReq.getMessage().trim() : "";
                     if (message.isBlank()) {
                         continue;
                     }
@@ -171,8 +165,8 @@ public class OrderController {
                             message
                     ));
                 }
-            } else if (i.get("cardMessage") instanceof String cardMessage && !cardMessage.isBlank()) {
-                cardMessages.add(new OrderItem.CardMessageEntry(null, null, cardMessage.trim()));
+            } else if (i.getCardMessage() != null && !i.getCardMessage().isBlank()) {
+                cardMessages.add(new OrderItem.CardMessageEntry(null, null, i.getCardMessage().trim()));
             }
             oi.setCardMessages(cardMessages);
             oi.setOrder(order);
