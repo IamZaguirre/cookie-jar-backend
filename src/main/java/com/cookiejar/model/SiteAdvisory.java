@@ -21,6 +21,9 @@ public class SiteAdvisory {
     @Column(columnDefinition = "TEXT")
     private String message;
 
+    @Column(columnDefinition = "TEXT")
+    private String imageUrl;
+
     @Column(nullable = false, columnDefinition = "boolean NOT NULL DEFAULT false")
     private Boolean active = false;
 
@@ -34,6 +37,9 @@ public class SiteAdvisory {
 
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }
