@@ -63,7 +63,7 @@ public class PromoController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Promo body) {
+    public ResponseEntity<?> update(@PathVariable("id") Long id, @RequestBody Promo body) {
         return repository.findById(id).map(promo -> {
             if (body.getTitle() != null) promo.setTitle(body.getTitle());
             if (body.getDescription() != null) promo.setDescription(body.getDescription());
@@ -75,10 +75,17 @@ public class PromoController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         if (!repository.existsById(id)) return ResponseEntity.notFound().build();
         Promo promo = repository.findById(id).get();
-        if (promo.getImageUrl() != null) cloudinaryService.deleteImage(promo.getImageUrl());
+        if (promo.getImageUrl() != null) {
+            try {
+                cloudinaryService.deleteImage(promo.getImageUrl());
+            } catch (Exception e) {
+                // Log but don't block deletion if image removal fails
+                System.err.println("Failed to delete promo image from Cloudinary: " + e.getMessage());
+            }
+        }
         repository.deleteById(id);
         return ResponseEntity.noContent().build();
     }

@@ -63,7 +63,7 @@ public class GalleryController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> update(@PathVariable("id") Long id, @RequestBody Map<String, Object> body) {
         return repository.findById(id).map(photo -> {
             if (body.containsKey("caption")) photo.setCaption((String) body.get("caption"));
             if (body.containsKey("sortOrder")) photo.setSortOrder((Integer) body.get("sortOrder"));

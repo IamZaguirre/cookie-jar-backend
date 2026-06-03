@@ -6,7 +6,6 @@ COPY pom.xml ./
 COPY src ./src
 
 RUN mvn -DskipTests clean package
-
 # ✅ Switch to Alpine-based JRE (much smaller)
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
