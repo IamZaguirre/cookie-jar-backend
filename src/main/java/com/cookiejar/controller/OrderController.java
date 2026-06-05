@@ -14,13 +14,17 @@ import com.cookiejar.repository.ProductRepository;
 import com.cookiejar.repository.VariantRepository;
 import com.cookiejar.service.CloudinaryService;
 import com.cookiejar.service.EmailService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -62,8 +66,20 @@ public class OrderController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("message", "Validation failed");
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage());
+        }
+        body.put("errors", fieldErrors);
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @PostMapping
-    public ResponseEntity<?> create(@RequestBody CreateOrderRequest body) {
+    public ResponseEntity<?> create(@Valid @RequestBody CreateOrderRequest body) {
         System.out.println("[Order] POST /api/orders received: " + body);
         List<CreateOrderRequest.OrderItemRequest> items = body.getItems();
         Long createdById = body.getCreatedById();

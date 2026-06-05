@@ -1,15 +1,34 @@
 package com.cookiejar.dto;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public class CreateOrderRequest {
 
+    @NotBlank(message = "First name is required")
     private String firstName;
+
+    @NotBlank(message = "Last name is required")
     private String lastName;
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Please enter a valid email address")
     private String email;
+
+    @NotBlank(message = "Phone number is required")
     private String phone;
+
+    @NotBlank(message = "Pick-up date and time is required")
     private String neededAt;
+
     private Long createdById;
+
+    @NotEmpty(message = "Please add at least one item to your order")
+    @Valid
     private List<OrderItemRequest> items;
 
     public String getFirstName() { return firstName; }

@@ -2,6 +2,8 @@ package com.cookiejar.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "disabled_dates", uniqueConstraints = @UniqueConstraint(columnNames = "date"))
@@ -18,6 +20,11 @@ public class DisabledDate {
     @Column(name = "popup_message", columnDefinition = "TEXT")
     private String popupMessage;
 
+    @ElementCollection
+    @CollectionTable(name = "disabled_date_times", joinColumns = @JoinColumn(name = "disabled_date_id"))
+    @Column(name = "time")
+    private Set<String> disabledTimes = new HashSet<>();
+
     public DisabledDate() {}
 
     public Long getId() { return id; }
@@ -31,4 +38,7 @@ public class DisabledDate {
 
     public String getPopupMessage() { return popupMessage; }
     public void setPopupMessage(String popupMessage) { this.popupMessage = popupMessage; }
+
+    public Set<String> getDisabledTimes() { return disabledTimes; }
+    public void setDisabledTimes(Set<String> disabledTimes) { this.disabledTimes = disabledTimes; }
 }
