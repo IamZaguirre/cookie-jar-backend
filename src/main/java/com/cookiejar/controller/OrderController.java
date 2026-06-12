@@ -112,12 +112,12 @@ public class OrderController {
             List<CreateOrderRequest.SelectedAddOnRequest> selectedAddOns = i.getSelectedAddOns() != null ? i.getSelectedAddOns() : List.of();
             System.out.println("[Order] Processing item: productId=" + productId + " variantId=" + variantId + " qty=" + qty);
             Product p = productRepository.findById(productId).orElse(null);
-            if (p == null) { System.out.println("[Order] Product not found: " + productId); return ResponseEntity.badRequest().body("product not found"); }
+            if (p == null) { System.out.println("[Order] Product not found: " + productId); return ResponseEntity.badRequest().body("One of your selected products is no longer available. Please remove it from your order and try again."); }
             int unitPrice;
             String variantName = null;
             if (variantId != null) {
                 Variant v = variantRepository.findById(variantId).orElse(null);
-                if (v == null) { System.out.println("[Order] Variant not found: " + variantId); return ResponseEntity.badRequest().body("variant not found"); }
+                if (v == null) { System.out.println("[Order] Variant not found: " + variantId); return ResponseEntity.badRequest().body("A selected option for \"" + p.getName() + "\" is no longer available. Please go back and reselect your options."); }
                 double discount = (v.getDiscountPercent() != null && v.getDiscountPercent() > 0)
                         ? v.getDiscountPercent()
                         : (p.getDiscountPercent() != null ? p.getDiscountPercent() : 0);
@@ -125,12 +125,22 @@ public class OrderController {
                         ? (int) Math.round(v.getPriceCents() * (1 - discount / 100.0))
                         : v.getPriceCents();
                 variantName = v.getName();
+                if (v.getInventory() < qty) {
+                    int available = v.getInventory();
+                    String availableMsg = available == 0 ? "is out of stock" : "only has " + available + " left in stock";
+                    return ResponseEntity.badRequest().body("\"" + p.getName() + " — " + variantName + "\" " + availableMsg + ". You requested " + qty + ".");
+                }
                 v.setInventory(v.getInventory() - qty);
                 variantRepository.save(v);
             } else {
                 unitPrice = p.getPriceCents();
                 if (p.getDiscountPercent() != null && p.getDiscountPercent() > 0) {
                     unitPrice = (int) Math.round(p.getPriceCents() * (1 - p.getDiscountPercent() / 100.0));
+                }
+                if (p.getInventory() < qty) {
+                    int available = p.getInventory();
+                    String availableMsg = available == 0 ? "is out of stock" : "only has " + available + " left in stock";
+                    return ResponseEntity.badRequest().body("\"" + p.getName() + "\" " + availableMsg + ". You requested " + qty + ".");
                 }
                 p.setInventory(p.getInventory() - qty);
                 productRepository.save(p);

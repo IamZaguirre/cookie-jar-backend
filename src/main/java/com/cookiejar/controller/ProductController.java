@@ -261,26 +261,47 @@ public class ProductController {
                             e.setImageUrl(null);
                             e.setImageUrls(new ArrayList<>());
                         }
-                        // Update variants if present
+                        // Update variants if present — update in-place to preserve IDs
                         if (variantsNode != null && variantsNode.isArray()) {
-                            List<Variant> parsedVariants = new ArrayList<>();
+                            List<Variant> existing = e.getVariants();
+                            List<Variant> toKeep = new ArrayList<>();
                             for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
+                                Long vId = vNode.has("id") && !vNode.get("id").isNull() ? vNode.get("id").asLong() : null;
                                 String vName = vNode.get("name").asText();
                                 int vInventory = vNode.get("inventory").asInt();
                                 int vPriceCents = vNode.has("priceCents")
                                     ? vNode.get("priceCents").asInt()
                                     : (vNode.has("price") ? (int) Math.round(vNode.get("price").asDouble() * 100) : 0);
-                                Variant variant = new Variant();
-                                variant.setName(vName);
-                                variant.setInventory(vInventory);
-                                variant.setPriceCents(vPriceCents);
-                                if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
-                                    variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
+                                Double vDiscount = (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull())
+                                    ? vNode.get("discountPercent").asDouble() : null;
+                                // Find existing variant by id first, then by name
+                                Variant match = null;
+                                if (vId != null) {
+                                    for (Variant ev : existing) { if (ev.getId().equals(vId)) { match = ev; break; } }
                                 }
-                                parsedVariants.add(variant);
+                                if (match == null) {
+                                    for (Variant ev : existing) { if (ev.getName().equals(vName)) { match = ev; break; } }
+                                }
+                                if (match != null) {
+                                    match.setName(vName);
+                                    match.setInventory(vInventory);
+                                    match.setPriceCents(vPriceCents);
+                                    match.setDiscountPercent(vDiscount);
+                                    toKeep.add(match);
+                                } else {
+                                    Variant newVariant = new Variant();
+                                    newVariant.setName(vName);
+                                    newVariant.setInventory(vInventory);
+                                    newVariant.setPriceCents(vPriceCents);
+                                    newVariant.setDiscountPercent(vDiscount);
+                                    newVariant.setProduct(e);
+                                    toKeep.add(newVariant);
+                                }
                             }
-                            e.setVariants(parsedVariants);
-                            variantRepository.saveAll(e.getVariants());
+                            // Remove variants not in the new list
+                            existing.removeIf(ev -> toKeep.stream().noneMatch(v -> v.getId() != null && v.getId().equals(ev.getId())));
+                            for (Variant v : toKeep) { if (!existing.contains(v)) { existing.add(v); v.setProduct(e); } }
+                            variantRepository.saveAll(existing);
                         }
                         // Update add-ons if present
                         com.fasterxml.jackson.databind.JsonNode addOnsNode = rootNode.get("addOns");

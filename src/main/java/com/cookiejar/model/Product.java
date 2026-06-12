@@ -20,6 +20,7 @@ public class Product {
     private Long id;
     @Column(nullable = false)
     private String name;
+    @Column(columnDefinition = "TEXT")
     private String description;
     @Column(nullable = false)
     private Integer priceCents;
