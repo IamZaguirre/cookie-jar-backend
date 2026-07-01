@@ -55,6 +55,7 @@ public class CreateOrderRequest {
     public static class OrderItemRequest {
         private Long productId;
         private Long variantId;
+        private String variantName;
         private Integer quantity;
         private List<SelectedAddOnRequest> selectedAddOns;
         private List<CardMessageRequest> cardMessages;
@@ -65,6 +66,9 @@ public class CreateOrderRequest {
 
         public Long getVariantId() { return variantId; }
         public void setVariantId(Long variantId) { this.variantId = variantId; }
+
+        public String getVariantName() { return variantName; }
+        public void setVariantName(String variantName) { this.variantName = variantName; }
 
         public Integer getQuantity() { return quantity; }
         public void setQuantity(Integer quantity) { this.quantity = quantity; }

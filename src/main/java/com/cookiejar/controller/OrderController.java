@@ -189,6 +189,10 @@ public class OrderController {
                 if (p.getDiscountPercent() != null && p.getDiscountPercent() > 0) {
                     unitPrice = (int) Math.round(p.getPriceCents() * (1 - p.getDiscountPercent() / 100.0));
                 }
+                // Use client-supplied variantName (e.g. B. Midi flavor summary)
+                if (i.getVariantName() != null && !i.getVariantName().isBlank()) {
+                    variantName = i.getVariantName();
+                }
                 boolean productUsesSchedule = p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty();
                 if (!productUsesSchedule && p.getInventory() < qty) {
                     int available = p.getInventory();
