@@ -22,6 +22,10 @@ public class Product {
         @MapKeyColumn(name = "day_of_week")
         @Column(name = "qty_limit")
         private Map<String, Integer> dayQtyLimits = new HashMap<>();
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonManagedReference("product-boxflavors")
+    @jakarta.persistence.OrderBy("sortOrder ASC")
+    private List<BoxFlavor> boxFlavors = new ArrayList<>();
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -126,4 +130,10 @@ public class Product {
 
     public Map<String, Integer> getDayQtyLimits() { return dayQtyLimits; }
     public void setDayQtyLimits(Map<String, Integer> dayQtyLimits) { this.dayQtyLimits = dayQtyLimits; }
+    public List<BoxFlavor> getBoxFlavors() { return boxFlavors; }
+    public void setBoxFlavors(List<BoxFlavor> boxFlavors) {
+        this.boxFlavors.clear();
+        if (boxFlavors == null) return;
+        for (BoxFlavor bf : boxFlavors) { bf.setProduct(this); this.boxFlavors.add(bf); }
+    }
 }

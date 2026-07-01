@@ -3,9 +3,11 @@ package com.cookiejar.controller;
 import com.cookiejar.model.Product;
 import com.cookiejar.model.Variant;
 import com.cookiejar.model.AddOn;
+import com.cookiejar.model.BoxFlavor;
 import com.cookiejar.repository.ProductRepository;
 import com.cookiejar.repository.VariantRepository;
 import com.cookiejar.repository.AddOnRepository;
+import com.cookiejar.repository.BoxFlavorRepository;
 import com.cookiejar.service.CloudinaryService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,14 +34,16 @@ public class ProductController {
     private final ProductRepository repository;
     private final VariantRepository variantRepository;
     private final AddOnRepository addOnRepository;
+    private final BoxFlavorRepository boxFlavorRepository;
     private final CloudinaryService cloudinaryService;
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
 
-    public ProductController(ProductRepository repository, VariantRepository variantRepository, AddOnRepository addOnRepository, CloudinaryService cloudinaryService) {
+    public ProductController(ProductRepository repository, VariantRepository variantRepository, AddOnRepository addOnRepository, BoxFlavorRepository boxFlavorRepository, CloudinaryService cloudinaryService) {
         this.repository = repository;
         this.variantRepository = variantRepository;
         this.addOnRepository = addOnRepository;
+        this.boxFlavorRepository = boxFlavorRepository;
         this.cloudinaryService = cloudinaryService;
     }
 
@@ -150,6 +154,28 @@ public class ProductController {
                 });
                 p.setDayQtyLimits(dayMap);
             }
+            // Set boxFlavors if present in JSON
+            com.fasterxml.jackson.databind.JsonNode boxFlavorsNodeCreate = rootNode1.get("boxFlavors");
+            if (boxFlavorsNodeCreate != null && boxFlavorsNodeCreate.isArray()) {
+                List<BoxFlavor> parsedFlavors = new ArrayList<>();
+                int bfSort = 0;
+                for (com.fasterxml.jackson.databind.JsonNode f : boxFlavorsNodeCreate) {
+                    String fname = f.isTextual() ? f.asText().trim() : (f.has("name") ? f.get("name").asText().trim() : "");
+                    if (fname.isEmpty()) continue;
+                    BoxFlavor bf = new BoxFlavor();
+                    bf.setName(fname);
+                    bf.setSortOrder(bfSort++);
+                    if (!f.isTextual() && f.has("dayQtyLimits") && f.get("dayQtyLimits").isObject()) {
+                        Map<String, Integer> dayMap = new HashMap<>();
+                        f.get("dayQtyLimits").fields().forEachRemaining(entry -> {
+                            if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                        });
+                        bf.setDayQtyLimits(dayMap);
+                    }
+                    parsedFlavors.add(bf);
+                }
+                p.setBoxFlavors(parsedFlavors);
+            }
             // Upload all images; first becomes imageUrl, rest go to imageUrls
             if (images != null && !images.isEmpty()) {
                 List<String> uploadedUrls = new ArrayList<>();
@@ -176,6 +202,9 @@ public class ProductController {
                 }
                 addOnRepository.saveAll(p.getAddOns());
                 logger.info("[CREATE PRODUCT] Saved {} add-ons for product id={}", p.getAddOns().size(), saved.getId());
+            }
+            if (p.getBoxFlavors() != null && !p.getBoxFlavors().isEmpty()) {
+                logger.info("[CREATE PRODUCT] Cascading {} box flavors for product id={}", p.getBoxFlavors().size(), saved.getId());
             }
             logger.info("[CREATE PRODUCT] Product saved with id={}", saved.getId());
             return ResponseEntity.status(201).body(saved);
@@ -264,6 +293,29 @@ public class ProductController {
                             e.setDayQtyLimits(dayMap);
                         } else if (dayQtyLimitsNodeUpdate != null && dayQtyLimitsNodeUpdate.isNull()) {
                             e.setDayQtyLimits(new HashMap<>());
+                        }
+                        // Handle boxFlavors field
+                        com.fasterxml.jackson.databind.JsonNode boxFlavorsNodeUpdate = rootNode.get("boxFlavors");
+                        if (boxFlavorsNodeUpdate != null && boxFlavorsNodeUpdate.isArray()) {
+                            List<BoxFlavor> newFlavors = new ArrayList<>();
+                            int bfSort = 0;
+                            for (com.fasterxml.jackson.databind.JsonNode f : boxFlavorsNodeUpdate) {
+                                String fname = f.isTextual() ? f.asText().trim() : (f.has("name") ? f.get("name").asText().trim() : "");
+                                if (fname.isEmpty()) continue;
+                                BoxFlavor bf = new BoxFlavor();
+                                bf.setName(fname);
+                                bf.setSortOrder(bfSort++);
+                                if (!f.isTextual() && f.has("dayQtyLimits") && f.get("dayQtyLimits").isObject()) {
+                                    Map<String, Integer> dayMap = new HashMap<>();
+                                    f.get("dayQtyLimits").fields().forEachRemaining(entry -> {
+                                        if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                                    });
+                                    bf.setDayQtyLimits(dayMap);
+                                }
+                                newFlavors.add(bf);
+                            }
+                            e.setBoxFlavors(newFlavors);
+                            logger.info("[UPDATE PRODUCT] Set {} box flavors for product id={}", newFlavors.size(), e.getId());
                         }
                         // Determine which old URLs are being removed and delete them from Cloudinary
                         List<String> allOldUrls = new ArrayList<>();

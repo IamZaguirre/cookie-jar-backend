@@ -21,6 +21,7 @@ public class OrderItem {
     @ManyToOne
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"variants","boxFlavors","imageUrls","dayQtyLimits","addOns"})
     @ManyToOne
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;

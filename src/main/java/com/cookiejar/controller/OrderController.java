@@ -154,13 +154,16 @@ public class OrderController {
                         ? (int) Math.round(v.getPriceCents() * (1 - discount / 100.0))
                         : v.getPriceCents();
                 variantName = v.getName();
-                if (v.getInventory() < qty) {
+                boolean variantUsesSchedule = v.getDayQtyLimits() != null && !v.getDayQtyLimits().isEmpty();
+                if (!variantUsesSchedule && v.getInventory() < qty) {
                     int available = v.getInventory();
                     String availableMsg = available == 0 ? "is out of stock" : "only has " + available + " left in stock";
-                    return ResponseEntity.badRequest().body("\"" + p.getName() + " — " + variantName + "\" " + availableMsg + ". You requested " + qty + ".");
+                    return ResponseEntity.badRequest().body("\"" + p.getName() + " \u2014 " + variantName + "\" " + availableMsg + ". You requested " + qty + ".");
                 }
-                v.setInventory(v.getInventory() - qty);
-                variantRepository.save(v);
+                if (!variantUsesSchedule) {
+                    v.setInventory(v.getInventory() - qty);
+                    variantRepository.save(v);
+                }
             } else {
                 // Validate available days (product-level)
                 if (p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty() && order.getNeededAt() != null) {
@@ -186,13 +189,16 @@ public class OrderController {
                 if (p.getDiscountPercent() != null && p.getDiscountPercent() > 0) {
                     unitPrice = (int) Math.round(p.getPriceCents() * (1 - p.getDiscountPercent() / 100.0));
                 }
-                if (p.getInventory() < qty) {
+                boolean productUsesSchedule = p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty();
+                if (!productUsesSchedule && p.getInventory() < qty) {
                     int available = p.getInventory();
                     String availableMsg = available == 0 ? "is out of stock" : "only has " + available + " left in stock";
                     return ResponseEntity.badRequest().body("\"" + p.getName() + "\" " + availableMsg + ". You requested " + qty + ".");
                 }
-                p.setInventory(p.getInventory() - qty);
-                productRepository.save(p);
+                if (!productUsesSchedule) {
+                    p.setInventory(p.getInventory() - qty);
+                    productRepository.save(p);
+                }
             }
             List<String> addOnNames = new ArrayList<>();
             Map<Long, String> selectedAddOnNamesById = new HashMap<>();
@@ -250,6 +256,15 @@ public class OrderController {
             total += unitPrice * qty + addOnTotalCents;
         }
         order.setTotalCents(total);
+        // A. Mega box discount: every 6 pcs across all Mega variants = -₱5 (500 cents)
+        int megaQty = orderItems.stream()
+                .filter(oi -> "A. Mega".equals(oi.getProduct().getName()))
+                .mapToInt(OrderItem::getQuantity)
+                .sum();
+        int megaDiscount = (megaQty / 6) * 500;
+        if (megaDiscount > 0) {
+            order.setTotalCents(total - megaDiscount);
+        }
         order.setItems(orderItems);
         System.out.println("[Order] Saving order, total=" + total + " items=" + orderItems.size());
         Order savedOrder;
@@ -320,11 +335,11 @@ public class OrderController {
                 }
                 order.setProofOfPaymentUrl(imageUrl);
                 order.getProofOfPaymentUrls().add(imageUrl);
-                Order savedOrder = orderRepository.save(order);
+                orderRepository.save(order);
                 if (isResubmission) {
-                    emailService.sendPaymentResubmissionNotification(savedOrder);
+                    emailService.sendPaymentResubmissionNotification(order);
                 }
-                return ResponseEntity.ok(savedOrder);
+                return ResponseEntity.ok(java.util.Map.of("proofOfPaymentUrl", imageUrl));
             } catch (Exception e) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("Failed to upload proof of payment: ").append(e.getMessage()).append("\n");
