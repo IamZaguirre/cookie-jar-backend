@@ -1,16 +1,19 @@
 package com.cookiejar.model;
 
 import jakarta.persistence.*;
+import java.util.HashMap;
+import java.util.Map;
 
 @Entity
 @Table(name = "variants")
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class Variant {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
-    private String name; // e.g. "1pc", "4pcs"
+    private String name;
 
     @Column(nullable = false)
     private Integer inventory;
@@ -20,6 +23,12 @@ public class Variant {
 
     @Column(name = "discount_percent", nullable = true)
     private Double discountPercent;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "variant_day_qty_limits", joinColumns = @JoinColumn(name = "variant_id"))
+    @MapKeyColumn(name = "day_of_week")
+    @Column(name = "qty_limit")
+    private Map<String, Integer> dayQtyLimits = new HashMap<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
@@ -45,6 +54,8 @@ public class Variant {
     public void setPriceCents(Integer priceCents) { this.priceCents = priceCents; }
     public Double getDiscountPercent() { return discountPercent; }
     public void setDiscountPercent(Double discountPercent) { this.discountPercent = discountPercent; }
+    public Map<String, Integer> getDayQtyLimits() { return dayQtyLimits; }
+    public void setDayQtyLimits(Map<String, Integer> dayQtyLimits) { this.dayQtyLimits = dayQtyLimits; }
     public Product getProduct() { return product; }
     public void setProduct(Product product) { this.product = product; }
 }

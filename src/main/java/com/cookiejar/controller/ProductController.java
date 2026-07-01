@@ -20,8 +20,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/products")
@@ -71,6 +74,13 @@ public class ProductController {
                     variant.setPriceCents(vPriceCents);
                     if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
                         variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
+                    }
+                    if (vNode.has("dayQtyLimits") && vNode.get("dayQtyLimits").isObject()) {
+                        Map<String, Integer> dayMap = new HashMap<>();
+                        vNode.get("dayQtyLimits").fields().forEachRemaining(entry -> {
+                            if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                        });
+                        variant.setDayQtyLimits(dayMap);
                     }
                     parsedVariants.add(variant);
                 }
@@ -128,6 +138,15 @@ public class ProductController {
                 p.setActive(activeNode.asBoolean());
             } else {
                 p.setActive(true);
+            }
+            // Set dailyQtyLimit if present in JSON
+            com.fasterxml.jackson.databind.JsonNode dayQtyLimitsNodeCreate = rootNode1.get("dayQtyLimits");
+            if (dayQtyLimitsNodeCreate != null && dayQtyLimitsNodeCreate.isObject()) {
+                Map<String, Integer> dayMap = new HashMap<>();
+                dayQtyLimitsNodeCreate.fields().forEachRemaining(entry -> {
+                    if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                });
+                p.setDayQtyLimits(dayMap);
             }
             // Upload all images; first becomes imageUrl, rest go to imageUrls
             if (images != null && !images.isEmpty()) {
@@ -233,6 +252,17 @@ public class ProductController {
                         if (activeNode != null && !activeNode.isNull()) {
                             e.setActive(activeNode.asBoolean());
                         }
+                        // Handle dailyQtyLimit field
+                        com.fasterxml.jackson.databind.JsonNode dayQtyLimitsNodeUpdate = rootNode.get("dayQtyLimits");
+                        if (dayQtyLimitsNodeUpdate != null && dayQtyLimitsNodeUpdate.isObject()) {
+                            Map<String, Integer> dayMap = new HashMap<>();
+                            dayQtyLimitsNodeUpdate.fields().forEachRemaining(entry -> {
+                                if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                            });
+                            e.setDayQtyLimits(dayMap);
+                        } else if (dayQtyLimitsNodeUpdate != null && dayQtyLimitsNodeUpdate.isNull()) {
+                            e.setDayQtyLimits(new HashMap<>());
+                        }
                         // Determine which old URLs are being removed and delete them from Cloudinary
                         List<String> allOldUrls = new ArrayList<>();
                         if (e.getImageUrl() != null) allOldUrls.add(e.getImageUrl());
@@ -287,6 +317,13 @@ public class ProductController {
                                     match.setInventory(vInventory);
                                     match.setPriceCents(vPriceCents);
                                     match.setDiscountPercent(vDiscount);
+                                    if (vNode.has("dayQtyLimits") && vNode.get("dayQtyLimits").isObject()) {
+                                        Map<String, Integer> dayMap = new HashMap<>();
+                                        vNode.get("dayQtyLimits").fields().forEachRemaining(entry -> {
+                                            if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                                        });
+                                        match.setDayQtyLimits(dayMap);
+                                    }
                                     toKeep.add(match);
                                 } else {
                                     Variant newVariant = new Variant();
@@ -294,6 +331,13 @@ public class ProductController {
                                     newVariant.setInventory(vInventory);
                                     newVariant.setPriceCents(vPriceCents);
                                     newVariant.setDiscountPercent(vDiscount);
+                                    if (vNode.has("dayQtyLimits") && vNode.get("dayQtyLimits").isObject()) {
+                                        Map<String, Integer> dayMap = new HashMap<>();
+                                        vNode.get("dayQtyLimits").fields().forEachRemaining(entry -> {
+                                            if (!entry.getValue().isNull()) dayMap.put(entry.getKey(), entry.getValue().asInt());
+                                        });
+                                        newVariant.setDayQtyLimits(dayMap);
+                                    }
                                     newVariant.setProduct(e);
                                     toKeep.add(newVariant);
                                 }

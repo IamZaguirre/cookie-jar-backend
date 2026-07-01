@@ -115,9 +115,38 @@ public class OrderController {
             if (p == null) { System.out.println("[Order] Product not found: " + productId); return ResponseEntity.badRequest().body("One of your selected products is no longer available. Please remove it from your order and try again."); }
             int unitPrice;
             String variantName = null;
+            Variant selectedVariant = null;
             if (variantId != null) {
                 Variant v = variantRepository.findById(variantId).orElse(null);
                 if (v == null) { System.out.println("[Order] Variant not found: " + variantId); return ResponseEntity.badRequest().body("A selected option for \"" + p.getName() + "\" is no longer available. Please go back and reselect your options."); }
+                selectedVariant = v;
+                // Validate available days + qty limit (variant-level, fallback to product-level)
+                Map<String, Integer> activeLimits =
+                        (v.getDayQtyLimits() != null && !v.getDayQtyLimits().isEmpty())
+                                ? v.getDayQtyLimits()
+                                : (p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty() ? p.getDayQtyLimits() : null);
+                if (activeLimits != null && order.getNeededAt() != null) {
+                    java.time.ZoneId zone = java.time.ZoneId.of("Asia/Manila");
+                    String dayOfWeek = order.getNeededAt().atZone(zone).getDayOfWeek().name();
+                    if (!activeLimits.containsKey(dayOfWeek)) {
+                        return ResponseEntity.badRequest().body("\"" + p.getName() + " — " + v.getName() + "\" is not available on that day. Please choose a different pick-up date.");
+                    }
+                    Integer activeLimit = activeLimits.get(dayOfWeek);
+                    java.time.LocalDate pickupDate = order.getNeededAt().atZone(zone).toLocalDate();
+                    Instant dayStart = pickupDate.atStartOfDay(zone).toInstant();
+                    Instant dayEnd = pickupDate.plusDays(1).atStartOfDay(zone).toInstant();
+                    int alreadyOrdered = (v.getDayQtyLimits() != null && !v.getDayQtyLimits().isEmpty())
+                            ? orderRepository.sumQtyForVariantOnDay(v.getId(), dayStart, dayEnd)
+                            : orderRepository.sumQtyForProductOnDay(p.getId(), dayStart, dayEnd);
+                    if (alreadyOrdered + qty > activeLimit) {
+                        int remaining = Math.max(0, activeLimit - alreadyOrdered);
+                        String label = "\"" + p.getName() + " — " + v.getName() + "\"";
+                        String msg = remaining == 0
+                                ? label + " has reached its daily limit for that day. Please choose a different pick-up date."
+                                : label + " only has " + remaining + " slot(s) left for that day. You requested " + qty + ".";
+                        return ResponseEntity.badRequest().body(msg);
+                    }
+                }
                 double discount = (v.getDiscountPercent() != null && v.getDiscountPercent() > 0)
                         ? v.getDiscountPercent()
                         : (p.getDiscountPercent() != null ? p.getDiscountPercent() : 0);
@@ -133,6 +162,26 @@ public class OrderController {
                 v.setInventory(v.getInventory() - qty);
                 variantRepository.save(v);
             } else {
+                // Validate available days (product-level)
+                if (p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty() && order.getNeededAt() != null) {
+                    java.time.ZoneId zone = java.time.ZoneId.of("Asia/Manila");
+                    String dayOfWeek = order.getNeededAt().atZone(zone).getDayOfWeek().name();
+                    if (!p.getDayQtyLimits().containsKey(dayOfWeek)) {
+                        return ResponseEntity.badRequest().body("\"" + p.getName() + "\" is not available on that day. Please choose a different pick-up date.");
+                    }
+                    Integer activeLimit = p.getDayQtyLimits().get(dayOfWeek);
+                    java.time.LocalDate pickupDate = order.getNeededAt().atZone(zone).toLocalDate();
+                    Instant dayStart = pickupDate.atStartOfDay(zone).toInstant();
+                    Instant dayEnd = pickupDate.plusDays(1).atStartOfDay(zone).toInstant();
+                    int alreadyOrdered = orderRepository.sumQtyForProductOnDay(p.getId(), dayStart, dayEnd);
+                    if (alreadyOrdered + qty > activeLimit) {
+                        int remaining = Math.max(0, activeLimit - alreadyOrdered);
+                        String msg = remaining == 0
+                                ? "\"" + p.getName() + "\" has reached its daily limit for that day. Please choose a different pick-up date."
+                                : "\"" + p.getName() + "\" only has " + remaining + " slot(s) left for that day. You requested " + qty + ".";
+                        return ResponseEntity.badRequest().body(msg);
+                    }
+                }
                 unitPrice = p.getPriceCents();
                 if (p.getDiscountPercent() != null && p.getDiscountPercent() > 0) {
                     unitPrice = (int) Math.round(p.getPriceCents() * (1 - p.getDiscountPercent() / 100.0));
@@ -170,6 +219,7 @@ public class OrderController {
             System.out.println("[Order] Item ready: name=" + p.getName() + " variantName=" + variantName + " unitPrice=" + unitPrice + " addOnTotalCents=" + addOnTotalCents);
             OrderItem oi = new OrderItem();
             oi.setProduct(p);
+            oi.setVariant(selectedVariant);
             oi.setQuantity(qty);
             oi.setUnitPrice(unitPrice);
             oi.setAddOnTotalCents(addOnTotalCents);

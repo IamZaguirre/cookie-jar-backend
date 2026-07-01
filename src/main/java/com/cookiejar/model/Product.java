@@ -4,7 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "products")
@@ -15,6 +17,11 @@ public class Product {
         private Integer minHours;
         @Column(name = "discount_percent", nullable = true)
         private Double discountPercent;
+        @ElementCollection(fetch = FetchType.EAGER)
+        @CollectionTable(name = "product_day_qty_limits", joinColumns = @JoinColumn(name = "product_id"))
+        @MapKeyColumn(name = "day_of_week")
+        @Column(name = "qty_limit")
+        private Map<String, Integer> dayQtyLimits = new HashMap<>();
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -115,4 +122,7 @@ public class Product {
 
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }
+
+    public Map<String, Integer> getDayQtyLimits() { return dayQtyLimits; }
+    public void setDayQtyLimits(Map<String, Integer> dayQtyLimits) { this.dayQtyLimits = dayQtyLimits; }
 }
