@@ -24,6 +24,9 @@ public class Variant {
     @Column(name = "discount_percent", nullable = true)
     private Double discountPercent;
 
+    @Column(name = "sort_order", nullable = false, columnDefinition = "integer NOT NULL DEFAULT 0")
+    private Integer sortOrder = 0;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "variant_day_qty_limits", joinColumns = @JoinColumn(name = "variant_id"))
     @MapKeyColumn(name = "day_of_week")
@@ -54,6 +57,8 @@ public class Variant {
     public void setPriceCents(Integer priceCents) { this.priceCents = priceCents; }
     public Double getDiscountPercent() { return discountPercent; }
     public void setDiscountPercent(Double discountPercent) { this.discountPercent = discountPercent; }
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public Map<String, Integer> getDayQtyLimits() { return dayQtyLimits; }
     public void setDayQtyLimits(Map<String, Integer> dayQtyLimits) { this.dayQtyLimits = dayQtyLimits; }
     public Product getProduct() { return product; }

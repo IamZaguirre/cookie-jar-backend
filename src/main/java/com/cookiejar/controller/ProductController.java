@@ -62,6 +62,7 @@ public class ProductController {
             com.fasterxml.jackson.databind.JsonNode variantsNode = rootNode.get("variants");
             if (variantsNode != null && variantsNode.isArray()) {
                 List<Variant> parsedVariants = new ArrayList<>();
+                int vSortOrder = 0;
                 for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
                     String vName = vNode.get("name").asText();
                     int vInventory = vNode.get("inventory").asInt();
@@ -72,6 +73,7 @@ public class ProductController {
                     variant.setName(vName);
                     variant.setInventory(vInventory);
                     variant.setPriceCents(vPriceCents);
+                    variant.setSortOrder(vSortOrder++);
                     if (vNode.has("discountPercent") && !vNode.get("discountPercent").isNull()) {
                         variant.setDiscountPercent(vNode.get("discountPercent").asDouble());
                     }
@@ -295,6 +297,7 @@ public class ProductController {
                         if (variantsNode != null && variantsNode.isArray()) {
                             List<Variant> existing = e.getVariants();
                             List<Variant> toKeep = new ArrayList<>();
+                            int sortIdx = 0;
                             for (com.fasterxml.jackson.databind.JsonNode vNode : variantsNode) {
                                 Long vId = vNode.has("id") && !vNode.get("id").isNull() ? vNode.get("id").asLong() : null;
                                 String vName = vNode.get("name").asText();
@@ -317,6 +320,7 @@ public class ProductController {
                                     match.setInventory(vInventory);
                                     match.setPriceCents(vPriceCents);
                                     match.setDiscountPercent(vDiscount);
+                                    match.setSortOrder(sortIdx++);
                                     if (vNode.has("dayQtyLimits") && vNode.get("dayQtyLimits").isObject()) {
                                         Map<String, Integer> dayMap = new HashMap<>();
                                         vNode.get("dayQtyLimits").fields().forEachRemaining(entry -> {
@@ -331,6 +335,7 @@ public class ProductController {
                                     newVariant.setInventory(vInventory);
                                     newVariant.setPriceCents(vPriceCents);
                                     newVariant.setDiscountPercent(vDiscount);
+                                    newVariant.setSortOrder(sortIdx++);
                                     if (vNode.has("dayQtyLimits") && vNode.get("dayQtyLimits").isObject()) {
                                         Map<String, Integer> dayMap = new HashMap<>();
                                         vNode.get("dayQtyLimits").fields().forEachRemaining(entry -> {
