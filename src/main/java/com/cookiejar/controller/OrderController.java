@@ -55,6 +55,51 @@ public class OrderController {
         return ResponseEntity.ok("All orders deleted");
     }
 
+    @GetMapping("/slots")
+    public ResponseEntity<?> getSlots(
+            @RequestParam(name = "variantId", required = false) Long variantId,
+            @RequestParam(name = "productId", required = false) Long productId,
+            @RequestParam("date") String date) {
+        try {
+            java.time.LocalDate localDate = java.time.LocalDate.parse(date);
+            java.time.ZoneId zone = java.time.ZoneId.of("Asia/Manila");
+            String dayOfWeek = localDate.getDayOfWeek().name();
+            Instant dayStart = localDate.atStartOfDay(zone).toInstant();
+            Instant dayEnd = localDate.plusDays(1).atStartOfDay(zone).toInstant();
+
+            if (variantId != null) {
+                Variant v = variantRepository.findById(variantId).orElse(null);
+                if (v == null) return ResponseEntity.notFound().build();
+                Product p = v.getProduct();
+                Map<String, Integer> activeLimits =
+                        (v.getDayQtyLimits() != null && !v.getDayQtyLimits().isEmpty())
+                                ? v.getDayQtyLimits()
+                                : (p != null && p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty() ? p.getDayQtyLimits() : null);
+                if (activeLimits == null || !activeLimits.containsKey(dayOfWeek)) {
+                    return ResponseEntity.ok(Map.of("limit", -1, "alreadyOrdered", 0, "remaining", 9999));
+                }
+                int limit = activeLimits.get(dayOfWeek);
+                int alreadyOrdered = orderRepository.sumQtyForVariantOnDay(variantId, dayStart, dayEnd);
+                int remaining = Math.max(0, limit - alreadyOrdered);
+                return ResponseEntity.ok(Map.of("limit", limit, "alreadyOrdered", alreadyOrdered, "remaining", remaining));
+            } else if (productId != null) {
+                Product p = productRepository.findById(productId).orElse(null);
+                if (p == null) return ResponseEntity.notFound().build();
+                Map<String, Integer> limits = p.getDayQtyLimits();
+                if (limits == null || !limits.containsKey(dayOfWeek)) {
+                    return ResponseEntity.ok(Map.of("limit", -1, "alreadyOrdered", 0, "remaining", 9999));
+                }
+                int limit = limits.get(dayOfWeek);
+                int alreadyOrdered = orderRepository.sumQtyForProductOnDay(productId, dayStart, dayEnd);
+                int remaining = Math.max(0, limit - alreadyOrdered);
+                return ResponseEntity.ok(Map.of("limit", limit, "alreadyOrdered", alreadyOrdered, "remaining", remaining));
+            }
+            return ResponseEntity.badRequest().body("variantId or productId required");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Invalid parameters: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteOrder(@PathVariable("id") String id) {
         return orderRepository.findById(id).map(order -> {
@@ -154,16 +199,13 @@ public class OrderController {
                         ? (int) Math.round(v.getPriceCents() * (1 - discount / 100.0))
                         : v.getPriceCents();
                 variantName = v.getName();
-                boolean variantUsesSchedule = v.getDayQtyLimits() != null && !v.getDayQtyLimits().isEmpty();
-                if (!variantUsesSchedule && v.getInventory() < qty) {
+                if (v.getInventory() < qty) {
                     int available = v.getInventory();
                     String availableMsg = available == 0 ? "is out of stock" : "only has " + available + " left in stock";
                     return ResponseEntity.badRequest().body("\"" + p.getName() + " \u2014 " + variantName + "\" " + availableMsg + ". You requested " + qty + ".");
                 }
-                if (!variantUsesSchedule) {
-                    v.setInventory(v.getInventory() - qty);
-                    variantRepository.save(v);
-                }
+                v.setInventory(v.getInventory() - qty);
+                variantRepository.save(v);
             } else {
                 // Validate available days (product-level)
                 if (p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty() && order.getNeededAt() != null) {
@@ -193,16 +235,13 @@ public class OrderController {
                 if (i.getVariantName() != null && !i.getVariantName().isBlank()) {
                     variantName = i.getVariantName();
                 }
-                boolean productUsesSchedule = p.getDayQtyLimits() != null && !p.getDayQtyLimits().isEmpty();
-                if (!productUsesSchedule && p.getInventory() < qty) {
+                if (p.getInventory() < qty) {
                     int available = p.getInventory();
                     String availableMsg = available == 0 ? "is out of stock" : "only has " + available + " left in stock";
                     return ResponseEntity.badRequest().body("\"" + p.getName() + "\" " + availableMsg + ". You requested " + qty + ".");
                 }
-                if (!productUsesSchedule) {
-                    p.setInventory(p.getInventory() - qty);
-                    productRepository.save(p);
-                }
+                p.setInventory(p.getInventory() - qty);
+                productRepository.save(p);
             }
             List<String> addOnNames = new ArrayList<>();
             Map<Long, String> selectedAddOnNamesById = new HashMap<>();
