@@ -8,6 +8,7 @@ import com.cookiejar.repository.ProductRepository;
 import com.cookiejar.repository.VariantRepository;
 import com.cookiejar.repository.AddOnRepository;
 import com.cookiejar.repository.BoxFlavorRepository;
+import com.cookiejar.repository.OrderItemRepository;
 import com.cookiejar.service.CloudinaryService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,15 +37,17 @@ public class ProductController {
     private final AddOnRepository addOnRepository;
     private final BoxFlavorRepository boxFlavorRepository;
     private final CloudinaryService cloudinaryService;
+    private final OrderItemRepository orderItemRepository;
 
     private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
 
-    public ProductController(ProductRepository repository, VariantRepository variantRepository, AddOnRepository addOnRepository, BoxFlavorRepository boxFlavorRepository, CloudinaryService cloudinaryService) {
+    public ProductController(ProductRepository repository, VariantRepository variantRepository, AddOnRepository addOnRepository, BoxFlavorRepository boxFlavorRepository, CloudinaryService cloudinaryService, OrderItemRepository orderItemRepository) {
         this.repository = repository;
         this.variantRepository = variantRepository;
         this.addOnRepository = addOnRepository;
         this.boxFlavorRepository = boxFlavorRepository;
         this.cloudinaryService = cloudinaryService;
+        this.orderItemRepository = orderItemRepository;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -400,6 +403,14 @@ public class ProductController {
                                 }
                             }
                             // Remove variants not in the new list
+                            List<Long> removedVariantIds = new ArrayList<>();
+                            for (Variant ev : existing) {
+                                boolean kept = toKeep.stream().anyMatch(v -> v.getId() != null && v.getId().equals(ev.getId()));
+                                if (!kept && ev.getId() != null) removedVariantIds.add(ev.getId());
+                            }
+                            if (!removedVariantIds.isEmpty()) {
+                                orderItemRepository.nullifyVariantReferences(removedVariantIds);
+                            }
                             existing.removeIf(ev -> toKeep.stream().noneMatch(v -> v.getId() != null && v.getId().equals(ev.getId())));
                             for (Variant v : toKeep) { if (!existing.contains(v)) { existing.add(v); v.setProduct(e); } }
                             variantRepository.saveAll(existing);
