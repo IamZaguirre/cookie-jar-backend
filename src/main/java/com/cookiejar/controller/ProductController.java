@@ -102,9 +102,11 @@ public class ProductController {
                 for (com.fasterxml.jackson.databind.JsonNode aNode : addOnsNode) {
                     String aName = aNode.get("name").asText();
                     int aPriceCents = aNode.has("priceCents") ? aNode.get("priceCents").asInt() : 0;
+                    String aNote = aNode.has("note") ? aNode.get("note").asText(null) : null;
                     AddOn addOn = new AddOn();
                     addOn.setName(aName);
                     addOn.setPriceCents(aPriceCents);
+                    addOn.setNote(aNote);
                     parsedAddOns.add(addOn);
                 }
                 p.setAddOns(parsedAddOns);
@@ -422,9 +424,11 @@ public class ProductController {
                             for (com.fasterxml.jackson.databind.JsonNode aNode : addOnsNode) {
                                 String aName = aNode.get("name").asText();
                                 int aPriceCents = aNode.has("priceCents") ? aNode.get("priceCents").asInt() : 0;
+                                String aNote = aNode.has("note") ? aNode.get("note").asText(null) : null;
                                 AddOn addOn = new AddOn();
                                 addOn.setName(aName);
                                 addOn.setPriceCents(aPriceCents);
+                                addOn.setNote(aNote);
                                 parsedAddOns.add(addOn);
                             }
                             e.setAddOns(parsedAddOns);

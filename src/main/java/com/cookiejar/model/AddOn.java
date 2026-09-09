@@ -16,6 +16,9 @@ public class AddOn {
     @Column(nullable = false)
     private Integer priceCents;
 
+    @Column
+    private String note;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     @com.fasterxml.jackson.annotation.JsonBackReference("product-addons")
@@ -29,6 +32,8 @@ public class AddOn {
     public void setName(String name) { this.name = name; }
     public Integer getPriceCents() { return priceCents; }
     public void setPriceCents(Integer priceCents) { this.priceCents = priceCents; }
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
     public Product getProduct() { return product; }
     public void setProduct(Product product) { this.product = product; }
 }

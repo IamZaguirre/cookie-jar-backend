@@ -23,6 +23,18 @@ public class EmailService {
     private final String adminEmail;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    private boolean canSendEmail() {
+        if (apiKey.isBlank()) {
+            System.err.println("[Email] Missing RESEND_API_KEY. Emails will not be sent.");
+            return false;
+        }
+        if (fromEmail.isBlank()) {
+            System.err.println("[Email] Missing RESEND_FROM_EMAIL. Emails will not be sent.");
+            return false;
+        }
+        return true;
+    }
+
     public EmailService(@Value("${resend.api-key:}") String apiKey,
                         @Value("${resend.from-email:onboarding@resend.dev}") String fromEmail,
                         @Value("${app.admin-email:}") String adminEmail) {
@@ -35,7 +47,14 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String html) {
-        if (apiKey.isBlank()) { System.out.println("[Email] RESEND_API_KEY not configured, skipping email to " + to); return; }
+        if (!canSendEmail()) {
+            System.err.println("[Email] Skipping email to " + to + " because the Resend configuration is incomplete.");
+            return;
+        }
+        if (to == null || to.isBlank()) {
+            System.err.println("[Email] Skipping email with blank recipient. Subject: " + subject);
+            return;
+        }
         System.out.println("[Email] Sending to=" + to + " subject=\"" + subject + "\"");
         try {
             String body = "{\"from\":\"" + escape(fromEmail) + "\","
@@ -83,6 +102,10 @@ public class EmailService {
 
     @Async
     public void sendNewOrderNotification(Order order) {
+        if (adminEmail == null || adminEmail.isBlank()) {
+            System.err.println("[Email] Skipping admin order notification because app.admin-email is not configured.");
+            return;
+        }
         send(adminEmail,
                 "New Order " + formatOrderNumber(order) + " from " + order.getFirstName() + " " + order.getLastName(),
                 buildNewOrderHtml(order));
@@ -108,6 +131,10 @@ public class EmailService {
 
     @Async
     public void sendPaymentResubmissionNotification(Order order) {
+        if (adminEmail == null || adminEmail.isBlank()) {
+            System.err.println("[Email] Skipping payment resubmission notification because app.admin-email is not configured.");
+            return;
+        }
         send(adminEmail,
                 "Payment Resubmitted - " + formatOrderNumber(order) + " from " + order.getFirstName() + " " + order.getLastName(),
                 buildResubmissionHtml(order));
