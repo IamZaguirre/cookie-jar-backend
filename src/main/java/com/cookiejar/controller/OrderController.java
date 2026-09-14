@@ -6,11 +6,15 @@ import com.cookiejar.model.Admin;
 import com.cookiejar.model.Order;
 import com.cookiejar.model.OrderItem;
 import com.cookiejar.model.Product;
+import com.cookiejar.model.Promo;
+import com.cookiejar.model.PromoRedemption;
 import com.cookiejar.model.Variant;
 import com.cookiejar.repository.AddOnRepository;
 import com.cookiejar.repository.AdminRepository;
 import com.cookiejar.repository.OrderRepository;
 import com.cookiejar.repository.ProductRepository;
+import com.cookiejar.repository.PromoRedemptionRepository;
+import com.cookiejar.repository.PromoRepository;
 import com.cookiejar.repository.VariantRepository;
 import com.cookiejar.service.CloudinaryService;
 import com.cookiejar.service.EmailService;
@@ -36,15 +40,19 @@ public class OrderController {
     private final VariantRepository variantRepository;
     private final AddOnRepository addOnRepository;
     private final AdminRepository adminRepository;
+    private final PromoRepository promoRepository;
+    private final PromoRedemptionRepository promoRedemptionRepository;
     private final CloudinaryService cloudinaryService;
     private final EmailService emailService;
 
-    public OrderController(OrderRepository orderRepository, ProductRepository productRepository, VariantRepository variantRepository, AddOnRepository addOnRepository, AdminRepository adminRepository, CloudinaryService cloudinaryService, EmailService emailService) {
+    public OrderController(OrderRepository orderRepository, ProductRepository productRepository, VariantRepository variantRepository, AddOnRepository addOnRepository, AdminRepository adminRepository, PromoRepository promoRepository, PromoRedemptionRepository promoRedemptionRepository, CloudinaryService cloudinaryService, EmailService emailService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.addOnRepository = addOnRepository;
         this.adminRepository = adminRepository;
+        this.promoRepository = promoRepository;
+        this.promoRedemptionRepository = promoRedemptionRepository;
         this.cloudinaryService = cloudinaryService;
         this.emailService = emailService;
     }
@@ -129,7 +137,32 @@ public class OrderController {
         List<CreateOrderRequest.OrderItemRequest> items = body.getItems();
         Long createdById = body.getCreatedById();
         String neededAtValue = body.getNeededAt() != null ? body.getNeededAt().trim() : null;
+        String promoCode = body.getPromoCode() != null ? body.getPromoCode().trim() : null;
+        String normalizedEmail = body.getEmail() != null ? body.getEmail().trim() : "";
+        String normalizedPhone = body.getPhone() != null ? body.getPhone().trim() : "";
         if (items == null || items.isEmpty()) return ResponseEntity.badRequest().body("items required");
+        if (promoCode != null && !promoCode.isBlank()) {
+            Promo promo = promoRepository.findAll().stream()
+                    .filter(item -> item.getDiscountCode() != null && item.getDiscountCode().equalsIgnoreCase(promoCode))
+                    .filter(Promo::getActive)
+                    .findFirst()
+                    .orElse(null);
+            if (promo == null) {
+                return ResponseEntity.badRequest().body("This promo code is not valid or has expired.");
+            }
+            if (promo.getValidUntil() != null && promo.getValidUntil().isBefore(java.time.LocalDate.now())) {
+                return ResponseEntity.badRequest().body("This promo code has expired.");
+            }
+            if ("VOUCHER".equalsIgnoreCase(promo.getPromoType()) && promoRedemptionRepository.existsByPromoId(promo.getId())) {
+                return ResponseEntity.badRequest().body("This voucher code has already been used.");
+            }
+            if (promoRedemptionRepository.findByPromoIdAndEmail(promo.getId(), normalizedEmail).isPresent()) {
+                return ResponseEntity.badRequest().body("This promo code has already been used for this email address.");
+            }
+            if (promoRedemptionRepository.findByPromoIdAndPhone(promo.getId(), normalizedPhone).isPresent()) {
+                return ResponseEntity.badRequest().body("This promo code has already been used for this phone number.");
+            }
+        }
         Order order = new Order();
         order.setStatus("pending");
         order.setTotalCents(0);
@@ -137,6 +170,7 @@ public class OrderController {
         order.setLastName(body.getLastName());
         order.setEmail(body.getEmail());
         order.setPhone(body.getPhone());
+        order.setPromoCode(promoCode);
         if (neededAtValue != null && !neededAtValue.isEmpty()) {
             try {
                 order.setNeededAt(Instant.parse(neededAtValue));
@@ -305,9 +339,28 @@ public class OrderController {
                 .mapToInt(OrderItem::getQuantity)
                 .sum();
         int megaDiscount = (megaQty / 6) * 500;
+        int finalTotal = total;
         if (megaDiscount > 0) {
-            order.setTotalCents(total - megaDiscount);
+            finalTotal -= megaDiscount;
         }
+
+        Promo appliedPromo = null;
+        if (promoCode != null && !promoCode.isBlank()) {
+            appliedPromo = promoRepository.findAll().stream()
+                    .filter(item -> item.getDiscountCode() != null && item.getDiscountCode().equalsIgnoreCase(promoCode))
+                    .filter(Promo::getActive)
+                    .findFirst()
+                    .orElse(null);
+            if (appliedPromo != null && appliedPromo.getValidUntil() != null && !appliedPromo.getValidUntil().isBefore(java.time.LocalDate.now())) {
+                int promoPercent = appliedPromo.getDiscountPercent() != null ? appliedPromo.getDiscountPercent() : 0;
+                if (promoPercent > 0) {
+                    int promoDiscount = (int) Math.round(finalTotal * (promoPercent / 100.0));
+                    finalTotal = Math.max(0, finalTotal - promoDiscount);
+                }
+            }
+        }
+
+        order.setTotalCents(finalTotal);
         order.setItems(orderItems);
         System.out.println("[Order] Saving order, total=" + total + " items=" + orderItems.size());
         Order savedOrder;
@@ -379,6 +432,23 @@ public class OrderController {
                 order.setProofOfPaymentUrl(imageUrl);
                 order.getProofOfPaymentUrls().add(imageUrl);
                 orderRepository.save(order);
+                if (!isResubmission && order.getPromoCode() != null && !order.getPromoCode().isBlank()) {
+                    Promo promo = promoRepository.findAll().stream()
+                            .filter(item -> item.getDiscountCode() != null && item.getDiscountCode().equalsIgnoreCase(order.getPromoCode()))
+                            .filter(Promo::getActive)
+                            .findFirst()
+                            .orElse(null);
+                    if (promo != null) {
+                        PromoRedemption redemption = new PromoRedemption();
+                        redemption.setPromoId(promo.getId());
+                        redemption.setEmail(order.getEmail().trim());
+                        redemption.setPhone(order.getPhone().trim());
+                        if ("VOUCHER".equalsIgnoreCase(promo.getPromoType())) {
+                            redemption.setRedemptionKey("VOUCHER:" + promo.getId());
+                        }
+                        promoRedemptionRepository.save(redemption);
+                    }
+                }
                 if (isResubmission) {
                     emailService.sendPaymentResubmissionNotification(order);
                 }

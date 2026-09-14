@@ -18,37 +18,49 @@ import java.util.Locale;
 @Service
 public class EmailService {
 
+    private static final String BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
+
     private final String apiKey;
     private final String fromEmail;
+    private final String fromName;
     private final String adminEmail;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     private boolean canSendEmail() {
         if (apiKey.isBlank()) {
-            System.err.println("[Email] Missing RESEND_API_KEY. Emails will not be sent.");
+            System.err.println("[Email] Missing BREVO_API_KEY. Emails will not be sent.");
             return false;
         }
         if (fromEmail.isBlank()) {
-            System.err.println("[Email] Missing RESEND_FROM_EMAIL. Emails will not be sent.");
+            System.err.println("[Email] Missing BREVO_FROM_EMAIL. Emails will not be sent.");
             return false;
         }
         return true;
     }
 
-    public EmailService(@Value("${resend.api-key:}") String apiKey,
-                        @Value("${resend.from-email:onboarding@resend.dev}") String fromEmail,
+    public EmailService(@Value("${brevo.api-key:}") String apiKey,
+                        @Value("${brevo.from-email:}") String fromEmail,
+                        @Value("${brevo.from-name:Pink Cookie Jar}") String fromName,
                         @Value("${app.admin-email:}") String adminEmail) {
         this.apiKey = apiKey;
         this.fromEmail = fromEmail;
+        this.fromName = fromName;
         this.adminEmail = adminEmail;
         System.out.println("[Email] EmailService initialized. apiKey=" + (apiKey.isBlank() ? "MISSING" : "configured")
                 + " fromEmail=" + (fromEmail.isBlank() ? "MISSING" : fromEmail)
                 + " adminEmail=" + (adminEmail.isBlank() ? "MISSING" : adminEmail));
     }
 
+    private String buildRequestBody(String to, String subject, String html) {
+        return "{\"sender\":{\"name\":" + jsonString(fromName) + ",\"email\":\"" + escape(fromEmail) + "\"},"
+                + "\"to\":[{\"email\":\"" + escape(to) + "\"}],"
+                + "\"subject\":\"" + escape(subject) + "\","
+                + "\"htmlContent\":" + jsonString(html) + "}";
+    }
+
     private void send(String to, String subject, String html) {
         if (!canSendEmail()) {
-            System.err.println("[Email] Skipping email to " + to + " because the Resend configuration is incomplete.");
+            System.err.println("[Email] Skipping email to " + to + " because the Brevo configuration is incomplete.");
             return;
         }
         if (to == null || to.isBlank()) {
@@ -57,21 +69,19 @@ public class EmailService {
         }
         System.out.println("[Email] Sending to=" + to + " subject=\"" + subject + "\"");
         try {
-            String body = "{\"from\":\"" + escape(fromEmail) + "\","
-                    + "\"to\":[\"" + escape(to) + "\"],"
-                    + "\"subject\":\"" + escape(subject) + "\","
-                    + "\"html\":" + jsonString(html) + "}";
+            String body = buildRequestBody(to, subject, html);
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.resend.com/emails"))
-                    .header("Authorization", "Bearer " + apiKey)
+                    .uri(URI.create(BREVO_ENDPOINT))
+                    .header("api-key", apiKey)
                     .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 System.out.println("[Email] Sent OK to " + to);
             } else {
-                System.err.println("[Email] Resend returned " + response.statusCode() + " for " + to + ": " + response.body());
+                System.err.println("[Email] Brevo returned " + response.statusCode() + " for " + to + ": " + response.body());
             }
         } catch (Exception e) {
             System.err.println("[Email] Failed to send to " + to + ": " + e.getMessage());
@@ -141,23 +151,23 @@ public class EmailService {
     }
 
     public void sendRepaymentRequestEmail(Order order, String message) {
-        if (apiKey.isBlank()) { throw new RuntimeException("RESEND_API_KEY not configured"); }
+        if (apiKey.isBlank()) { throw new RuntimeException("BREVO_API_KEY not configured"); }
         if (order.getEmail() == null || order.getEmail().isBlank()) return;
         System.out.println("[Email] Sending repayment request for order " + order.getId() + " to " + order.getEmail());
         try {
-            String body = "{\"from\":\"" + escape(fromEmail) + "\","
-                    + "\"to\":[\"" + escape(order.getEmail()) + "\"],"
-                    + "\"subject\":\"" + escape("Action Required: Repayment Request for " + formatOrderNumber(order)) + "\","
-                    + "\"html\":" + jsonString(buildRepaymentRequestHtml(order, message)) + "}";
+            String body = buildRequestBody(order.getEmail(),
+                    "Action Required: Repayment Request for " + formatOrderNumber(order),
+                    buildRepaymentRequestHtml(order, message));
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.resend.com/emails"))
-                    .header("Authorization", "Bearer " + apiKey)
+                    .uri(URI.create(BREVO_ENDPOINT))
+                    .header("api-key", apiKey)
                     .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new RuntimeException("Resend returned " + response.statusCode() + ": " + response.body());
+                throw new RuntimeException("Brevo returned " + response.statusCode() + ": " + response.body());
             }
             System.out.println("[Email] Repayment request sent OK for order " + order.getId());
         } catch (RuntimeException e) {

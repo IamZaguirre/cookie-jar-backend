@@ -25,6 +25,8 @@ public class CreateOrderRequest {
     @NotBlank(message = "Pick-up date and time is required")
     private String neededAt;
 
+    private String promoCode;
+
     private Long createdById;
 
     @NotEmpty(message = "Please add at least one item to your order")
@@ -45,6 +47,9 @@ public class CreateOrderRequest {
 
     public String getNeededAt() { return neededAt; }
     public void setNeededAt(String neededAt) { this.neededAt = neededAt; }
+
+    public String getPromoCode() { return promoCode; }
+    public void setPromoCode(String promoCode) { this.promoCode = promoCode; }
 
     public Long getCreatedById() { return createdById; }
     public void setCreatedById(Long createdById) { this.createdById = createdById; }

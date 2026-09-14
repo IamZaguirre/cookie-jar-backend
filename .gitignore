@@ -2,6 +2,7 @@ target/
 *.class
 
 # Local secrets — never commit
+.env
 src/main/resources/application-local.properties
 application-local.properties
 

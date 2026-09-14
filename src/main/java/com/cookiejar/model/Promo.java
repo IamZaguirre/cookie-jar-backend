@@ -22,6 +22,12 @@ public class Promo {
 
     private String discountCode;
 
+    @Column(nullable = false)
+    private String promoType = "REUSABLE";
+
+    @Column(nullable = false)
+    private Integer discountPercent = 0;
+
     private LocalDate validUntil;
 
     @Column(nullable = false, columnDefinition = "boolean NOT NULL DEFAULT true")
@@ -46,6 +52,14 @@ public class Promo {
 
     public String getDiscountCode() { return discountCode; }
     public void setDiscountCode(String discountCode) { this.discountCode = discountCode; }
+
+    public String getPromoType() { return promoType; }
+    public void setPromoType(String promoType) {
+        this.promoType = promoType == null || promoType.isBlank() ? "REUSABLE" : promoType.toUpperCase();
+    }
+
+    public Integer getDiscountPercent() { return discountPercent; }
+    public void setDiscountPercent(Integer discountPercent) { this.discountPercent = discountPercent; }
 
     public LocalDate getValidUntil() { return validUntil; }
     public void setValidUntil(LocalDate validUntil) { this.validUntil = validUntil; }
