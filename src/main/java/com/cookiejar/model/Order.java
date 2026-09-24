@@ -25,6 +25,7 @@ public class Order {
     private String lastName;
     private String email;
     private String phone;
+    private String promoCode;
     private String proofOfPaymentUrl;
     @ElementCollection
     @CollectionTable(name = "order_proof_images", joinColumns = @JoinColumn(name = "order_id"))
@@ -67,6 +68,8 @@ public class Order {
     public void setEmail(String email) { this.email = email; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+    public String getPromoCode() { return promoCode; }
+    public void setPromoCode(String promoCode) { this.promoCode = promoCode; }
     public String getProofOfPaymentUrl() { return proofOfPaymentUrl; }
     public void setProofOfPaymentUrl(String proofOfPaymentUrl) { this.proofOfPaymentUrl = proofOfPaymentUrl; }
     public List<String> getProofOfPaymentUrls() { return proofOfPaymentUrls; }

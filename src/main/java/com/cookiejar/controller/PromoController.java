@@ -1,10 +1,14 @@
 package com.cookiejar.controller;
 
+import com.cookiejar.dto.ValidatePromoRequest;
 import com.cookiejar.model.Promo;
+import com.cookiejar.model.PromoRedemption;
+import com.cookiejar.repository.PromoRedemptionRepository;
 import com.cookiejar.repository.PromoRepository;
 import com.cookiejar.service.CloudinaryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,16 +17,20 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/promos")
 public class PromoController {
 
     private final PromoRepository repository;
+    private final PromoRedemptionRepository redemptionRepository;
     private final CloudinaryService cloudinaryService;
 
-    public PromoController(PromoRepository repository, CloudinaryService cloudinaryService) {
+    public PromoController(PromoRepository repository, PromoRedemptionRepository redemptionRepository, CloudinaryService cloudinaryService) {
         this.repository = repository;
+        this.redemptionRepository = redemptionRepository;
         this.cloudinaryService = cloudinaryService;
     }
 
@@ -30,6 +38,94 @@ public class PromoController {
     @GetMapping
     public ResponseEntity<List<Promo>> getActive() {
         return ResponseEntity.ok(repository.findByActiveTrueOrderByCreatedAtDesc());
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<?> validatePromo(@Valid @RequestBody ValidatePromoRequest body) {
+        if (body.getPromoCode() == null || body.getPromoCode().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Promo code is required"));
+        }
+        if (body.getEmail() == null || body.getEmail().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email is required"));
+        }
+        if (body.getPhone() == null || body.getPhone().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Phone is required"));
+        }
+
+        String normalizedCode = body.getPromoCode().trim();
+        Optional<Promo> promoOpt = repository.findAll().stream()
+                .filter(promo -> promo.getDiscountCode() != null && promo.getDiscountCode().equalsIgnoreCase(normalizedCode))
+                .filter(Promo::getActive)
+                .findFirst();
+
+        if (promoOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "This promo code is not valid or has expired."));
+        }
+
+        Promo promo = promoOpt.get();
+        if (promo.getValidUntil() != null && promo.getValidUntil().isBefore(LocalDate.now())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "This promo code has expired."));
+        }
+
+        String normalizedEmail = body.getEmail().trim();
+        String normalizedPhone = body.getPhone().trim();
+
+        if ("VOUCHER".equalsIgnoreCase(promo.getPromoType())
+                && redemptionRepository.existsByPromoId(promo.getId())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "This voucher code has already been used."));
+        }
+
+        Optional<PromoRedemption> byEmail = redemptionRepository.findByPromoIdAndEmail(promo.getId(), normalizedEmail);
+        if (byEmail.isPresent()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "This promo code has already been used for this email address."));
+        }
+
+        Optional<PromoRedemption> byPhone = redemptionRepository.findByPromoIdAndPhone(promo.getId(), normalizedPhone);
+        if (byPhone.isPresent()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "This promo code has already been used for this phone number."));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "valid", true,
+                "promoId", promo.getId(),
+                "discountCode", promo.getDiscountCode()
+        ));
+    }
+
+    @PostMapping("/redeem")
+    public ResponseEntity<?> redeemPromo(@RequestBody ValidatePromoRequest body) {
+        ResponseEntity<?> validation = validatePromo(body);
+        if (validation.getStatusCode().isError()) {
+            return validation;
+        }
+
+        Promo promo = repository.findAll().stream()
+                .filter(item -> item.getDiscountCode() != null && item.getDiscountCode().equalsIgnoreCase(body.getPromoCode().trim()))
+                .filter(Promo::getActive)
+                .findFirst()
+                .orElse(null);
+
+        if (promo == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Promo not found."));
+        }
+
+        String email = body.getEmail().trim();
+        String phone = body.getPhone().trim();
+
+        PromoRedemption redemption = new PromoRedemption();
+        redemption.setPromoId(promo.getId());
+        redemption.setEmail(email);
+        redemption.setPhone(phone);
+        if ("VOUCHER".equalsIgnoreCase(promo.getPromoType())) {
+            redemption.setRedemptionKey("VOUCHER:" + promo.getId());
+        }
+        redemptionRepository.save(redemption);
+
+        return ResponseEntity.ok(Map.of(
+                "redeemed", true,
+                "promoId", promo.getId(),
+                "discountCode", promo.getDiscountCode()
+        ));
     }
 
     /** Admin endpoint — all promos regardless of active flag */
